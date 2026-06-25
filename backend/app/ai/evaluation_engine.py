@@ -46,7 +46,7 @@ class EvaluationEngine:
             # Less than 5 words is not a real answer — score near zero
             return {
                 "technical_accuracy": 0.0, "problem_solving": 0.0, "completeness": 0.0,
-                "communication": 5.0, "grammar": 50.0, "confidence": 10.0,
+                "communication": 5.0, "grammar": 0.0, "confidence": 10.0,
                 "composite_score": 3.0,
                 "correct_concepts": [], "missing_concepts": ["No meaningful answer provided"],
                 "wrong_concepts": [],
