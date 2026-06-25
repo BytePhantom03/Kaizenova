@@ -201,7 +201,7 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
       setPhase("answering");
     } catch (e: any) {
       const detail = e.response?.data?.detail;
-      if (detail?.includes("No more questions") || e.response?.status === 404) {
+      if (detail?.includes("No more questions") || detail?.includes("Interview is completed") || e.response?.status === 404) {
         await completeInterview();
       } else {
         setErrorMsg(detail || "Failed to load question.");
@@ -376,15 +376,22 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
     setIsTranscribing(true);
 
     try {
-      // 1. Send audio to STT
-      const formData = new FormData();
-      formData.append("file", audioBlob, "answer.webm");
+      let transcribedText = answerRef.current;
+
+      // 1. Send audio to STT only if we have sufficient data
+      if (audioBlob.size > 1000) {
+        const formData = new FormData();
+        formData.append("file", audioBlob, "answer.webm");
+        
+        const sttRes = await api.post("/ai/stt", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        
+        if (sttRes.data?.transcript) {
+          transcribedText = sttRes.data.transcript;
+        }
+      }
       
-      const sttRes = await api.post("/ai/stt", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-      
-      const transcribedText = sttRes.data.transcript;
       setAnswer(transcribedText);
       setIsTranscribing(false);
 
@@ -584,7 +591,7 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
                   onChange={(e) => setAnswer(e.target.value)}
                   placeholder={isRecording ? "Listening to your voice... (Transcription will appear when you finish speaking)" : "Type your answer here..."}
                   rows={8}
-                  disabled={isPlayingTTS || isRecording}
+                  disabled={isPlayingTTS}
                   className="w-full rounded-2xl border border-border bg-surface px-5 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 resize-none leading-relaxed focus:shadow-[0_0_0_1px_rgba(0,240,255,0.3),0_0_12px_rgba(0,240,255,0.1)] disabled:opacity-50"
                 />
               </div>
@@ -596,17 +603,17 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
                     setAnswer("");
                     manualSubmitText();
                   }}
-                  disabled={isPlayingTTS || isRecording}
+                  disabled={isPlayingTTS}
                   className="gap-2 text-muted-foreground hover:text-foreground"
                 >
                   <SkipForward className="h-4 w-4" /> Skip
                 </Button>
                 <Button
                   onClick={() => manualSubmitText()}
-                  disabled={isPlayingTTS || isRecording || !answer.trim()}
+                  disabled={isPlayingTTS || (!isRecording && !answer.trim())}
                   className="flex-1 gap-2"
                 >
-                  Submit Text Answer <ChevronRight className="h-4 w-4" />
+                  {isRecording ? "Stop Listening & Submit" : "Submit Answer"} <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </motion.div>
@@ -801,7 +808,7 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => router.push("/dashboard")}>Dashboard</Button>
-                <Button onClick={() => loadNextQuestion()}>Try Again</Button>
+                <Button onClick={() => question ? setPhase("answering") : loadNextQuestion()}>Try Again</Button>
               </div>
             </motion.div>
           )}
