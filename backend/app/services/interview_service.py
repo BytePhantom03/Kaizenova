@@ -3,7 +3,7 @@ from sqlalchemy import select
 from uuid import UUID
 from datetime import datetime, timezone
 from typing import Optional
-from app.models.schemas.interview_schema import InterviewStartRequest, AnswerSubmitRequest, AnswerFeedbackResponse
+from app.models.schemas.interview_schema import InterviewStartRequest, AnswerSubmitRequest, AnswerFeedbackResponse, QuestionResponse
 from app.repositories.interview_repository import interview_repo
 from app.repositories.answer_repository import answer_repo, answer_score_repo
 from app.repositories.question_repository import question_repo
@@ -204,7 +204,7 @@ class InterviewService:
             feedback_text=eval_result["feedback_text"],
             correct_concepts=eval_result["correct_concepts"],
             missing_concepts=eval_result["missing_concepts"],
-            next_question=next_q
+            next_question=QuestionResponse.model_validate(next_q) if next_q else None
         )
 
     # ──────────────────────────────────────────────────────────────────────────

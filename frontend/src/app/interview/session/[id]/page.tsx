@@ -362,7 +362,9 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
       recognitionRef.current = null;
     }
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    if (audioContextRef.current) audioContextRef.current.close();
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      try { audioContextRef.current.close(); } catch (e) {}
+    }
     
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop(); // This will trigger onstop and processAndSubmitAudio
@@ -583,15 +585,16 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
               {/* Answer area */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-muted-foreground">Your Answer</label>
+                  <label className="text-sm font-medium text-muted-foreground">Your Answer (Voice Only)</label>
                   <span className="text-xs text-muted-foreground tabular-nums">{answer.length} chars</span>
                 </div>
                 <textarea
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
-                  placeholder={isRecording ? "Listening to your voice... (Transcription will appear when you finish speaking)" : "Type your answer here..."}
+                  placeholder={isRecording ? "Listening to your voice... (Transcription will appear when you finish speaking)" : "Speak your answer..."}
                   rows={8}
                   disabled={isPlayingTTS}
+                  readOnly={true}
                   className="w-full rounded-2xl border border-border bg-surface px-5 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 resize-none leading-relaxed focus:shadow-[0_0_0_1px_rgba(0,240,255,0.3),0_0_12px_rgba(0,240,255,0.1)] disabled:opacity-50"
                 />
               </div>
