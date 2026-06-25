@@ -20,48 +20,8 @@ from app.utils.logger import logger
 from typing import Dict, Any
 
 
-EVALUATION_PROMPT_TEMPLATE = """\
-You are a world-class senior technical interviewer conducting a real interview.
 
-## Interview Context
-Domain / Role: {domain}
-Current Difficulty Level: {difficulty}/10
-Question Number: {question_number}
 
-## Question Asked
-{question_text}
-
-## Ideal Answer Concepts
-{expected_answer}
-
-## Candidate's Answer
-{candidate_answer}
-
-## Your Task
-Evaluate the answer across all dimensions and return a JSON object.
-
-### Scoring Criteria
-- technical_accuracy (0-100): How correct and precise is the technical content?
-- problem_solving (0-100): Does the candidate show structured thinking and problem-solving ability?
-- communication (0-100): Is the answer clear, professional, and well-structured?
-- completeness (0-100): Did the candidate cover all important aspects?
-
-### Concept Analysis
-- correct_concepts: List every concept the candidate correctly explained.
-- missing_concepts: List important concepts that were completely absent.
-- wrong_concepts: List any technically incorrect statements.
-
-### Candidate Assessment
-- knowledge_level: One of "beginner", "intermediate", "advanced", "expert"
-- shows_weakness: true if the answer reveals a significant knowledge gap
-- weakness_area: The specific weak topic (e.g., "database indexing") if shows_weakness is true
-- needs_followup: true if the answer is superficial and needs deeper probing
-- followup_question: A sharp, probing follow-up question if needs_followup is true
-- candidate_confidence_signal: "high", "medium", or "low" based on writing style
-- feedback: A constructive, encouraging paragraph (2-4 sentences) as a real interviewer would give.
-
-Return ONLY a valid JSON object with all these keys.
-"""
 
 
 class EvaluationEngine:
@@ -109,13 +69,38 @@ class EvaluationEngine:
             confidence_data["wpm"] = len(words)
 
         # ── 3. LLM Deep Evaluation (Groq) ─────────────────────────────────────
-        prompt = EVALUATION_PROMPT_TEMPLATE.format(
-            domain=domain,
-            difficulty=difficulty,
-            question_number=question_number,
-            question_text=question_text,
-            expected_answer=expected_answer or "Not specified — judge based on general knowledge.",
-            candidate_answer=candidate_answer or "(No answer provided — candidate did not respond.)",
+        prompt = (
+            "You are a world-class senior technical interviewer conducting a real interview.\n\n"
+            "## Interview Context\n"
+            "Domain / Role: " + domain + "\n"
+            "Current Difficulty Level: " + str(difficulty) + "/10\n"
+            "Question Number: " + str(question_number) + "\n\n"
+            "## Question Asked\n"
+            + question_text + "\n\n"
+            "## Ideal Answer Concepts\n"
+            + (expected_answer or "Not specified — judge based on general knowledge.") + "\n\n"
+            "## Candidate's Answer\n"
+            + (candidate_answer or "(No answer provided — candidate did not respond.)") + "\n\n"
+            "## Your Task\n"
+            "Evaluate the answer across all dimensions and return a JSON object.\n\n"
+            "### Scoring Criteria\n"
+            "- technical_accuracy (0-100): How correct and precise is the technical content?\n"
+            "- problem_solving (0-100): Does the candidate show structured thinking?\n"
+            "- communication (0-100): Is the answer clear, professional, and well-structured?\n"
+            "- completeness (0-100): Did the candidate cover all important aspects?\n\n"
+            "### Concept Analysis\n"
+            "- correct_concepts: List every concept the candidate correctly explained.\n"
+            "- missing_concepts: List important concepts that were completely absent.\n"
+            "- wrong_concepts: List any technically incorrect statements.\n\n"
+            "### Candidate Assessment\n"
+            "- knowledge_level: One of \"beginner\", \"intermediate\", \"advanced\", \"expert\"\n"
+            "- shows_weakness: true if the answer reveals a significant knowledge gap\n"
+            "- weakness_area: The specific weak topic if shows_weakness is true\n"
+            "- needs_followup: true if the answer is superficial and needs deeper probing\n"
+            "- followup_question: A sharp probing follow-up question if needs_followup is true\n"
+            "- candidate_confidence_signal: \"high\", \"medium\", or \"low\" based on writing style\n"
+            "- feedback: A constructive encouraging paragraph (2-4 sentences) as a real interviewer would give.\n\n"
+            "Return ONLY a valid JSON object with all these keys."
         )
 
         system_prompt = (

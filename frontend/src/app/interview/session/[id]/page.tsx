@@ -585,16 +585,23 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
               {/* Answer area */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-muted-foreground">Your Answer (Voice Only)</label>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    {isRecording ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-danger animate-pulse inline-block" />
+                        Listening... (transcription appears here)
+                      </span>
+                    ) : "Your Answer"}
+                  </label>
                   <span className="text-xs text-muted-foreground tabular-nums">{answer.length} chars</span>
                 </div>
                 <textarea
                   value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  placeholder={isRecording ? "Listening to your voice... (Transcription will appear when you finish speaking)" : "Speak your answer..."}
+                  onChange={(e) => { if (!isRecording) setAnswer(e.target.value); }}
+                  placeholder={isRecording ? "Speak now — your words will appear here in real time..." : "Speak your answer when prompted..."}
                   rows={8}
                   disabled={isPlayingTTS}
-                  readOnly={true}
+                  style={{ cursor: isRecording ? "not-allowed" : "auto" }}
                   className="w-full rounded-2xl border border-border bg-surface px-5 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 resize-none leading-relaxed focus:shadow-[0_0_0_1px_rgba(0,240,255,0.3),0_0_12px_rgba(0,240,255,0.1)] disabled:opacity-50"
                 />
               </div>
