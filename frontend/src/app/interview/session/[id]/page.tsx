@@ -265,7 +265,8 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
       };
 
       utterance.onerror = (e) => {
-        console.error("TTS failed:", e);
+        // Silently catch TTS error as it usually means a cancel or autoplay restriction
+        // console.error("TTS failed:", e);
         if (mounted) {
           setIsPlayingTTS(false);
           startRecording();
@@ -419,12 +420,17 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
         const formData = new FormData();
         formData.append("file", audioBlob, "answer.webm");
         
-        const sttRes = await api.post("/ai/stt", formData, {
-          headers: { "Content-Type": "multipart/form-data" }
-        });
-        
-        if (sttRes.data?.transcript) {
-          transcribedText = sttRes.data.transcript;
+        try {
+          const sttRes = await api.post("/ai/stt", formData, {
+            headers: { "Content-Type": "multipart/form-data" }
+          });
+          
+          if (sttRes.data?.transcript) {
+            transcribedText = sttRes.data.transcript;
+          }
+        } catch (sttError) {
+          // Sarvam API might fail with 400 Bad Request due to format.
+          // Silently fallback to the native webkitSpeechRecognition transcript.
         }
       }
       
@@ -437,8 +443,15 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
         answer_text: transcribedText,
         was_skipped: !transcribedText.trim(),
       });
-      setFeedback(res.data);
-      setPhase("feedback");
+      
+      // Auto-transition to next question
+      if (res.data?.next_question) {
+        setQuestion(res.data.next_question);
+        setAnswer("");
+        setPhase("answering");
+      } else {
+        await completeInterview();
+      }
     } catch (e: any) {
       setErrorMsg(e.response?.data?.detail || "Failed to process audio or submit answer.");
       setPhase("error");
@@ -466,8 +479,15 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
         answer_text: currentText,
         was_skipped: !currentText.trim(),
       });
-      setFeedback(res.data);
-      setPhase("feedback");
+      
+      // Auto-transition to next question
+      if (res.data?.next_question) {
+        setQuestion(res.data.next_question);
+        setAnswer("");
+        setPhase("answering");
+      } else {
+        await completeInterview();
+      }
     } catch (e: any) {
       setErrorMsg(e.response?.data?.detail || "Failed to submit answer.");
       setPhase("error");
@@ -685,111 +705,7 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
           {/* Evaluating */}
           {phase === "evaluating" && <EvaluatingPhase isTranscribing={isTranscribing} />}
 
-          {/* Feedback */}
-          {phase === "feedback" && feedback && (
-            <motion.div key="feedback" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
-            >
-              {/* Score card with ring */}
-              <div className="rounded-2xl border border-border bg-card/30 backdrop-blur-sm p-6">
-                <div className="flex flex-col sm:flex-row items-center gap-6">
-                  <ScoreRing score={feedback.composite_score} />
-                  <div className="flex-1 w-full space-y-4">
-                    <h2 className="text-lg font-semibold text-foreground text-center sm:text-left">Performance Breakdown</h2>
 
-                    {[
-                      { label: "Technical Accuracy", value: feedback.technical_accuracy },
-                      { label: "Communication", value: feedback.communication },
-                    ].map((item) => (
-                      <div key={item.label}>
-                        <div className="flex justify-between text-sm mb-1.5">
-                          <span className="text-muted-foreground">{item.label}</span>
-                          <span className={`font-semibold ${scoreColor(item.value)}`}>{item.value.toFixed(0)}%</span>
-                        </div>
-                        <div className="w-full h-2 rounded-full bg-border overflow-hidden">
-                          <motion.div
-                            className={`h-full rounded-full ${scoreBgColor(item.value)}`}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${item.value}%` }}
-                            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* AI Feedback */}
-              <div className="rounded-2xl border border-border bg-card/30 p-6">
-                <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary" /> AI Feedback
-                </h3>
-                <p className="text-muted-foreground leading-relaxed text-sm">{feedback.feedback_text}</p>
-              </div>
-
-              {/* Concepts as pills */}
-              {(feedback.correct_concepts.length > 0 || feedback.missing_concepts.length > 0) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {feedback.correct_concepts.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      className="rounded-2xl border border-success/20 bg-success/5 p-5"
-                    >
-                      <div className="text-xs font-semibold text-success uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Concepts Covered
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {feedback.correct_concepts.map((c, i) => (
-                          <motion.span
-                            key={i}
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.3 + i * 0.05 }}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-success/10 text-success/90 border border-success/20"
-                          >
-                            {c}
-                          </motion.span>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                  {feedback.missing_concepts.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                      className="rounded-2xl border border-warning/20 bg-warning/5 p-5"
-                    >
-                      <div className="text-xs font-semibold text-warning uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                        <AlertCircle className="h-3.5 w-3.5" /> Concepts Missed
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {feedback.missing_concepts.map((c, i) => (
-                          <motion.span
-                            key={i}
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.4 + i * 0.05 }}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-warning/10 text-warning/90 border border-warning/20"
-                          >
-                            {c}
-                          </motion.span>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </div>
-              )}
-
-              <Button onClick={handleNext} className="w-full gap-2">
-                {feedback.next_question ? "Next Question" : "View Results"}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </motion.div>
-          )}
 
           {/* Completed */}
           {phase === "completed" && (

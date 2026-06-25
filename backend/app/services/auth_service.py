@@ -13,6 +13,8 @@ from app.utils.email_sender import send_verification_email, send_password_reset_
 from app.config import settings
 from app.utils.logger import logger
 
+from jose import JWTError
+
 class AuthService:
     async def register_user(self, db: AsyncSession, request: RegisterRequest) -> User:
         existing_user = await user_repo.get_by_email(db, request.email)
@@ -69,7 +71,7 @@ class AuthService:
                 
             access_token = create_access_token(data={"sub": str(user.id)})
             return access_token, settings.security.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        except ValueError:
+        except (ValueError, JWTError):
             raise AuthError("Invalid or expired refresh token", 401)
 
     async def logout_user(self, redis: Redis, access_token: str, refresh_token: str | None = None):
