@@ -133,11 +133,15 @@ class InterviewService:
             )
 
         # ── AI Evaluation ─────────────────────────────────────────────────────
+        questions_answered_so_far = len(state.get("asked_questions", []))
         eval_result = await evaluation_engine.evaluate_answer(
             question_text=question.question_text,
             expected_answer=question.expected_answer or "",
             candidate_answer=request.answer_text or "",
-            audio_file_path=None
+            audio_file_path=None,
+            domain=interview.domain or "General",
+            difficulty=state.get("current_difficulty", 5),
+            question_number=questions_answered_so_far + 1,
         )
 
         # ── Persist Score ─────────────────────────────────────────────────────
@@ -189,13 +193,29 @@ class InterviewService:
             "questions_answered": questions_answered,
         })
 
-        # ── Fetch next question (if session not over) ─────────────────────────
+        # ── Fetch next question using adaptive follow-up logic ─────────────────
+        # Blueprint: if needs_followup → generate a follow-up (deeper drill)
+        #            if shows_weakness → explore weakness area
+        #            otherwise → get next adaptive question from pool
         next_q = None
+        next_q_response = None
         if questions_answered < 5:
-            try:
-                next_q = await self.get_next_question(db, interview_id, user_id)
-            except InterviewError:
-                pass
+            # Prefer LLM-generated follow-up (deep understanding validation per blueprint)
+            if eval_result.get("needs_followup") and eval_result.get("followup_question"):
+                # Synthetic follow-up question dict
+                next_q_response = QuestionResponse(
+                    id=question.id,
+                    question_text=eval_result["followup_question"],
+                    question_type="follow_up",
+                    difficulty=state.get("current_difficulty", 5),
+                    hints={"parent_question": question.question_text},
+                )
+            else:
+                try:
+                    next_q = await self.get_next_question(db, interview_id, user_id)
+                    next_q_response = QuestionResponse.model_validate(next_q)
+                except InterviewError:
+                    pass
 
         return AnswerFeedbackResponse(
             composite_score=eval_result["composite_score"],
@@ -204,7 +224,7 @@ class InterviewService:
             feedback_text=eval_result["feedback_text"],
             correct_concepts=eval_result["correct_concepts"],
             missing_concepts=eval_result["missing_concepts"],
-            next_question=QuestionResponse.model_validate(next_q) if next_q else None
+            next_question=next_q_response
         )
 
     # ──────────────────────────────────────────────────────────────────────────
