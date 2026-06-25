@@ -40,7 +40,7 @@ class SecuritySettings(BaseSettings):
 class AISettings(BaseSettings):
     GROQ_API_KEY: SecretStr = Field(default="", description="Groq API key for LLM inference")
     SARVAM_API_KEY: SecretStr = Field(default="", description="Sarvam API key for LLM inference")
-    GROQ_MODEL: str = Field(default="llama3-70b-8192", description="Groq model to use")
+    GROQ_MODEL: str = Field(default="llama-3.3-70b-versatile", description="Groq model to use")
     OLLAMA_BASE_URL: str = Field(default="http://localhost:11434")
     WHISPER_MODEL: str = "large-v3"
     LANGUAGETOOL_URL: str = Field(default="http://localhost:8010/v2/check")

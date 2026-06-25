@@ -24,7 +24,8 @@ class LLMEngine:
         if self._api_key is None:
             raw = settings.ai.GROQ_API_KEY.get_secret_value() if settings.ai.GROQ_API_KEY else ""
             self._api_key = raw.strip()
-            self._model = settings.ai.GROQ_MODEL or "llama3-70b-8192"
+            self._model = settings.ai.GROQ_MODEL or "llama-3.3-70b-versatile"
+            logger.info("groq_engine_init", model=self._model, has_key=bool(self._api_key))
         return self._api_key
 
     def _has_key(self) -> bool:
