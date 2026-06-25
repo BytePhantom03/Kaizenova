@@ -238,37 +238,51 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
   // Play TTS when a new question starts
   useEffect(() => {
     let mounted = true;
-    const playTTS = async (text: string) => {
-      try {
-        setIsPlayingTTS(true);
-        const res = await api.post("/ai/tts", { text });
-        if (!mounted) return;
-        const audio = new Audio(`data:audio/wav;base64,${res.data.audio_base64}`);
-        currentAudioRef.current = audio;
-        audio.onended = () => {
-          if (mounted) {
-            setIsPlayingTTS(false);
-            startRecording();
-          }
-        };
-        await audio.play();
-      } catch (e) {
-        console.error("TTS playback failed", e);
+
+    const playTTS = (text: string) => {
+      if (!('speechSynthesis' in window)) {
+        // Fallback if browser doesn't support TTS
+        setIsPlayingTTS(false);
+        startRecording();
+        return;
+      }
+
+      setIsPlayingTTS(true);
+      
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+
+      utterance.onend = () => {
         if (mounted) {
           setIsPlayingTTS(false);
-          startRecording(); // fallback
+          startRecording();
         }
-      }
+      };
+
+      utterance.onerror = (e) => {
+        console.error("TTS failed:", e);
+        if (mounted) {
+          setIsPlayingTTS(false);
+          startRecording();
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
     };
 
-    if (phase === "answering" && question) {
+    if (phase === "answering" && question?.question_text) {
       playTTS(question.question_text);
     }
-    
+
     return () => {
       mounted = false;
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
       }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
