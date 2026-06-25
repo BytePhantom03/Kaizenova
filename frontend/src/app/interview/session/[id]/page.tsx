@@ -441,6 +441,25 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
   };
 
   const completeInterview = async () => {
+    // Stop all audio and recording first
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (e) {}
+      recognitionRef.current = null;
+    }
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      try { audioContextRef.current.close(); } catch (e) {}
+    }
+    if (currentAudioRef.current) {
+      try { currentAudioRef.current.pause(); } catch (e) {}
+    }
+    setIsRecording(false);
+    setIsPlayingTTS(false);
+
+    setPhase("loading_question"); // Show loading while completing
     try {
       const res = await api.post(`/interviews/${interviewId}/complete`);
       if (res.data?.report_id) {

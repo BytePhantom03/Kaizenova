@@ -40,6 +40,27 @@ class EvaluationEngine:
         Implements the Kaizenova adaptive interview blueprint.
         """
 
+        # ── 0. Garbage / empty answer early return ────────────────────────────
+        answer_words = (candidate_answer or "").strip().split()
+        if len(answer_words) < 5:
+            # Less than 5 words is not a real answer — score near zero
+            return {
+                "technical_accuracy": 0.0, "problem_solving": 0.0, "completeness": 0.0,
+                "communication": 5.0, "grammar": 50.0, "confidence": 10.0,
+                "composite_score": 3.0,
+                "correct_concepts": [], "missing_concepts": ["No meaningful answer provided"],
+                "wrong_concepts": [],
+                "feedback_text": (
+                    "No meaningful answer was provided. Please speak clearly and explain your understanding "
+                    "of the topic. A complete answer should be at least a few sentences long."
+                ),
+                "grammar_issues": [], "wpm": len(answer_words), "pause_count": 0, "filler_word_count": 0,
+                "knowledge_level": "beginner", "shows_weakness": True,
+                "weakness_area": "Answer depth and completeness",
+                "needs_followup": False, "followup_question": "",
+                "candidate_confidence_signal": "low",
+            }
+
         # ── 1. Grammar Analysis ───────────────────────────────────────────────
         grammar_score, grammar_issues = await grammar_engine.check_grammar(candidate_answer)
 

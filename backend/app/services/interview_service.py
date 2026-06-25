@@ -85,10 +85,6 @@ class InterviewService:
         if not interview or interview.user_id != user_id:
             raise NotFoundError("Interview")
 
-        question = await question_repo.get_by_id(db, request.question_id)
-        if not question:
-            raise NotFoundError("Question")
-
         state = interview.session_state or {
             "asked_questions": [],
             "current_difficulty": 5,
@@ -96,11 +92,39 @@ class InterviewService:
             "scores_history": [],
         }
 
+        # ── Resolve question — may be a follow-up (not in questions table) ────
+        question = await question_repo.get_by_id(db, request.question_id)
+        is_followup = False
+        if not question:
+            # Check if it's a stored follow-up question in session_state
+            followup_text = state.get("followup_questions", {}).get(str(request.question_id))
+            if followup_text:
+                is_followup = True
+                class _SyntheticQuestion:
+                    id = request.question_id
+                    question_text = followup_text
+                    expected_answer = ""
+                    question_type = "follow_up"
+                    difficulty = state.get("current_difficulty", 5)
+                question = _SyntheticQuestion()
+            else:
+                raise NotFoundError("Question")
+
         # ── Create the Answer record ──────────────────────────────────────────
         sequence_order = len(state.get("asked_questions", [])) + 1
+
+        # Follow-up questions aren't in the questions table — reuse the last real question
+        # as the FK reference to satisfy the DB constraint.
+        if is_followup:
+            asked = state.get("asked_questions", [])
+            import uuid as _uuid2
+            db_question_id = _uuid2.UUID(asked[-1]) if asked else request.question_id
+        else:
+            db_question_id = request.question_id
+
         answer = await answer_repo.create(db, {
             "interview_id": interview_id,
-            "question_id": request.question_id,
+            "question_id": db_question_id,
             "user_id": user_id,
             "sequence_order": sequence_order,
             "answer_text": request.answer_text,
@@ -129,14 +153,14 @@ class InterviewService:
                 technical_accuracy=0.0,
                 communication=0.0,
                 feedback_text="Question skipped.",
-                next_question=next_q
+                next_question=QuestionResponse.model_validate(next_q) if next_q else None
             )
 
         # ── AI Evaluation ─────────────────────────────────────────────────────
         questions_answered_so_far = len(state.get("asked_questions", []))
         eval_result = await evaluation_engine.evaluate_answer(
             question_text=question.question_text,
-            expected_answer=question.expected_answer or "",
+            expected_answer=question.expected_answer if hasattr(question, "expected_answer") else "",
             candidate_answer=request.answer_text or "",
             audio_file_path=None,
             domain=interview.domain or "General",
@@ -193,19 +217,21 @@ class InterviewService:
             "questions_answered": questions_answered,
         })
 
-        # ── Fetch next question using adaptive follow-up logic ─────────────────
-        # Blueprint: if needs_followup → generate a follow-up (deeper drill)
-        #            if shows_weakness → explore weakness area
-        #            otherwise → get next adaptive question from pool
-        next_q = None
+        # ── Fetch next question ────────────────────────────────────────────────
+        # If LLM suggests a follow-up AND there are still questions left, inject it.
+        # Use a fresh UUID so the answer tracking doesn't collide with the parent question.
+        import uuid as _uuid
         next_q_response = None
         if questions_answered < 5:
-            # Prefer LLM-generated follow-up (deep understanding validation per blueprint)
             if eval_result.get("needs_followup") and eval_result.get("followup_question"):
-                # Synthetic follow-up question dict
+                followup_id = _uuid.uuid4()
+                followup_text = eval_result["followup_question"]
+                # Store follow-up in session_state so answer submission can retrieve it
+                state.setdefault("followup_questions", {})[str(followup_id)] = followup_text
+                await interview_repo.update(db, interview_id, {"session_state": state})
                 next_q_response = QuestionResponse(
-                    id=question.id,
-                    question_text=eval_result["followup_question"],
+                    id=followup_id,
+                    question_text=followup_text,
                     question_type="follow_up",
                     difficulty=state.get("current_difficulty", 5),
                     hints={"parent_question": question.question_text},
