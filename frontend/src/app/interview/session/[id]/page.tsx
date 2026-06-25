@@ -177,6 +177,26 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
     return () => clearInterval(timer);
   }, []);
 
+  // Proactively refresh the access token when the interview page loads.
+  // This prevents mid-session 401 failures for users who had a short-lived token.
+  useEffect(() => {
+    const refreshToken = async () => {
+      try {
+        const { data } = await import('axios').then(m => m.default.post(
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/auth/refresh`,
+          {},
+          { withCredentials: true }
+        ));
+        if (data?.access_token) {
+          localStorage.setItem('token', data.access_token);
+        }
+      } catch {
+        // Refresh failed — the 401 interceptor in axios.ts will handle individual requests
+      }
+    };
+    refreshToken();
+  }, []);
+
   const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   const loadNextQuestion = useCallback(async (q?: Question | null) => {

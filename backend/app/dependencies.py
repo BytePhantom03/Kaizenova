@@ -20,27 +20,40 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         # Check if token is blacklisted
         is_blacklisted = await redis.get(f"blacklist:{token}")
         if is_blacklisted:
-            raise AuthError("Token has been revoked")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
         payload = verify_token(token)
         user_id_str: str = payload.get("sub")
         if user_id_str is None:
-            raise AuthError("Invalid token payload")
+            raise credentials_exception
         import uuid
         user_id = uuid.UUID(user_id_str)
     except (JWTError, ValueError):
-        raise AuthError("Could not validate credentials")
-        
+        raise credentials_exception
+
     user = await user_repo.get_by_id(db, user_id)
     if user is None:
-        raise AuthError("User not found")
+        raise credentials_exception
     if not user.is_active:
-        raise AuthError("User account is inactive")
-        
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is inactive",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user
 
 async def require_verified_email(current_user: User = Depends(get_current_user)) -> User:
