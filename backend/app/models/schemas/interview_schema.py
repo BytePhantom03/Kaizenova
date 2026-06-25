@@ -30,6 +30,9 @@ class QuestionResponse(BaseModel):
     difficulty: int
     hints: Optional[Dict[str, Any]] = None
 
+    class Config:
+        from_attributes = True
+
 class AnswerSubmitRequest(BaseModel):
     question_id: UUID
     answer_text: Optional[str] = None
