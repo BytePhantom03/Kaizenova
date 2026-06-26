@@ -741,10 +741,49 @@ function SettingsTab() {
   );
 }
 
-// ─── DASHBOARD TAB ───────────────────────────────────────────────────────────
 function DashboardTab({ stats, loading, router, firstName, getGreeting }: {
   stats: DashboardStats; loading: boolean; router: any; firstName: string; getGreeting: () => string;
 }) {
+  const [recUrl, setRecUrl] = useState("/interview/setup");
+
+  // Build a smart recommended session URL based on latest performance
+  useEffect(() => {
+    if (stats.recent_activity.length === 0) return;
+    const buildRecUrl = async () => {
+      try {
+        const latestId = stats.recent_activity[0].id;
+        const res = await api.get(`/analytics/reports/${latestId}`);
+        const report = res.data;
+        const weakAreas: string[] = report.weak_areas || [];
+        const avgScore = stats.avg_score;
+        // Determine recommended difficulty based on avg score
+        const difficulty = avgScore >= 70 ? "advanced" : avgScore >= 45 ? "intermediate" : "beginner";
+        // Pick a domain from weak areas or default
+        const domainMap: Record<string, string> = {
+          "algorithms": "Software Engineering", "data structures": "Software Engineering",
+          "system design": "Software Engineering", "communication": "Software Engineering",
+          "frontend": "Frontend", "backend": "Backend", "database": "Backend",
+          "machine learning": "Data Science", "devops": "DevOps",
+        };
+        let domain = "Software Engineering";
+        for (const area of weakAreas) {
+          const key = Object.keys(domainMap).find(k => area.toLowerCase().includes(k));
+          if (key) { domain = domainMap[key]; break; }
+        }
+        const params = new URLSearchParams({
+          recommended: "true",
+          domain,
+          type: "technical",
+          difficulty,
+        });
+        setRecUrl(`/interview/setup?${params.toString()}`);
+      } catch {
+        // fallback to generic setup
+      }
+    };
+    buildRecUrl();
+  }, [stats]);
+
   if (loading) return (
     <div className="space-y-8">
       <div><div className="skeleton h-8 w-64 rounded mb-2" /><div className="skeleton h-4 w-48 rounded" /></div>
@@ -825,7 +864,7 @@ function DashboardTab({ stats, loading, router, firstName, getGreeting }: {
                   }
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => router.push("/interview/setup")}
+              <Button variant="outline" size="sm" onClick={() => router.push(recUrl)}
                 className="text-xs border-primary/30 text-primary hover:bg-primary/10">
                 <BrainCircuit className="h-3.5 w-3.5 mr-1.5" /> Start Recommended Session
               </Button>

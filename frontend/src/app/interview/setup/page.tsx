@@ -1,5 +1,6 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/ui/Logo";
@@ -60,7 +61,7 @@ const pageTransition = {
   transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
 };
 
-export default function InterviewSetup() {
+function InterviewSetupInner() {
   const { isAuthenticated } = useAuthStore();
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -76,9 +77,32 @@ export default function InterviewSetup() {
     duration_minutes: 30,
   });
 
+  const searchParams = useSearchParams();
+
   React.useEffect(() => {
     if (!isAuthenticated) router.push("/auth/login");
   }, [isAuthenticated, router]);
+
+  // Pre-fill from recommendation query params
+  useEffect(() => {
+    const recommended = searchParams.get("recommended");
+    const domain = searchParams.get("domain");
+    const type = searchParams.get("type");
+    const difficulty = searchParams.get("difficulty");
+    const role = searchParams.get("role");
+    if (recommended === "true") {
+      setForm(f => ({
+        ...f,
+        domain: domain || f.domain,
+        interview_type: type || f.interview_type,
+        difficulty_setting: difficulty || f.difficulty_setting,
+        target_role: role || f.target_role,
+      }));
+      // Skip to final step since everything is pre-configured
+      setStep(3);
+    }
+  }, [searchParams]);
+
 
   const handleStart = async () => {
     setIsLoading(true);
@@ -165,6 +189,21 @@ export default function InterviewSetup() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {searchParams.get("recommended") === "true" && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl border border-primary/30 bg-primary/5 flex items-center gap-3"
+          >
+            <Sparkles className="h-4 w-4 text-primary flex-shrink-0" />
+            <div>
+              <div className="text-sm font-semibold text-primary">AI-Recommended Session</div>
+              <div className="text-xs text-muted-foreground">
+                This session has been pre-configured based on your weak areas. You can adjust settings below before starting.
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         <AnimatePresence mode="wait">
           {/* Step 1 — Interview type */}
@@ -371,3 +410,12 @@ export default function InterviewSetup() {
     </div>
   );
 }
+
+export default function InterviewSetup() {
+  return (
+    <Suspense>
+      <InterviewSetupInner />
+    </Suspense>
+  );
+}
+
