@@ -72,7 +72,34 @@ class InterviewService:
         if not question:
             raise InterviewError("No more questions available for this domain")
 
+        # If this is an AI-generated question it won't exist in the questions table.
+        # Persist it so submit_answer can resolve it via question_repo and FK constraints work.
+        is_db_question = await question_repo.get_by_id(db, question.id)
+        if not is_db_question:
+            # Save to DB so the UUID is valid for FK in answers table
+            saved = await question_repo.create(db, {
+                "id": question.id,  # preserve the generated UUID
+                "domain": question.domain,
+                "difficulty": question.difficulty,
+                "question_type": question.question_type,
+                "question_text": question.question_text,
+                "expected_answer": None,
+                "key_concepts": [],
+                "hints": {},
+                "company_tags": [],
+                "is_active": True,
+                "usage_count": 0,
+            })
+            # Also store in session_state for quick lookups in submit_answer
+            ai_generated = state.get("ai_generated_questions", {})
+            ai_generated[str(question.id)] = question.question_text
+            state["ai_generated_questions"] = ai_generated
+            await interview_repo.update(db, interview_id, {"session_state": state})
+            return saved
+
         return question
+
+
 
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -98,33 +125,54 @@ class InterviewService:
             "scores_history": [],
         }
 
-        # ── Resolve question — may be a follow-up (not in questions table) ────
+        # ── Resolve question — may be AI-generated, a follow-up, or a real DB question ──
         question = await question_repo.get_by_id(db, request.question_id)
-        is_followup = False
+        is_synthetic = False
         if not question:
-            # Check if it's a stored follow-up question in session_state
-            followup_text = state.get("followup_questions", {}).get(str(request.question_id))
-            if followup_text:
-                is_followup = True
+            # 1. Check AI-generated questions stored in session_state
+            ai_gen_text = state.get("ai_generated_questions", {}).get(str(request.question_id))
+            if ai_gen_text:
+                is_synthetic = True
                 class _SyntheticQuestion:
                     id = request.question_id
-                    question_text = followup_text
+                    question_text = ai_gen_text
                     expected_answer = ""
-                    question_type = "follow_up"
+                    question_type = interview.interview_type or "technical"
                     difficulty = state.get("current_difficulty", 5)
                 question = _SyntheticQuestion()
             else:
-                raise NotFoundError("Question")
+                # 2. Check follow-up questions stored in session_state
+                followup_text = state.get("followup_questions", {}).get(str(request.question_id))
+                if followup_text:
+                    is_synthetic = True
+                    class _SyntheticQuestion:  # type: ignore[no-redef]
+                        id = request.question_id
+                        question_text = followup_text
+                        expected_answer = ""
+                        question_type = "follow_up"
+                        difficulty = state.get("current_difficulty", 5)
+                    question = _SyntheticQuestion()
+                else:
+                    raise NotFoundError("Question")
 
         # ── Create the Answer record ──────────────────────────────────────────
         sequence_order = len(state.get("asked_questions", [])) + 1
 
-        # Follow-up questions aren't in the questions table — reuse the last real question
-        # as the FK reference to satisfy the DB constraint.
-        if is_followup:
+        # Synthetic questions (AI-generated or follow-up) aren't in the questions table.
+        # Reuse the last real question's ID to satisfy the DB FK constraint.
+        if is_synthetic:
             asked = state.get("asked_questions", [])
             import uuid as _uuid2
-            db_question_id = _uuid2.UUID(asked[-1]) if asked else request.question_id
+            # Find the last real question ID (not in ai_generated_questions or followup_questions)
+            ai_gen_ids = set(state.get("ai_generated_questions", {}).keys())
+            followup_ids = set(state.get("followup_questions", {}).keys())
+            real_asked = [q for q in asked if q not in ai_gen_ids and q not in followup_ids]
+            if real_asked:
+                db_question_id = _uuid2.UUID(real_asked[-1])
+            elif asked:
+                db_question_id = _uuid2.UUID(asked[-1])
+            else:
+                db_question_id = request.question_id
         else:
             db_question_id = request.question_id
 

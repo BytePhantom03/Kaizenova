@@ -61,10 +61,13 @@ class AuthService:
                 raise AuthError("Refresh token revoked", 401)
 
             payload = verify_token(refresh_token)
-            user_id = payload.get("sub")
-            if not user_id:
+            user_id_str = payload.get("sub")
+            if not user_id_str:
                 raise AuthError("Invalid refresh token", 401)
                 
+            import uuid
+            user_id = uuid.UUID(user_id_str)
+            
             user = await user_repo.get_by_id(db, user_id)
             if not user or not user.is_active:
                 raise AuthError("User not active", 401)
