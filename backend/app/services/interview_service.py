@@ -56,18 +56,24 @@ class InterviewService:
         state = interview.session_state or {}
         asked_questions = state.get("asked_questions", [])
         current_difficulty = state.get("current_difficulty", 5)
+        # Track actual question texts to prevent LLM from repeating them
+        asked_question_texts = state.get("asked_question_texts", [])
 
         question = await question_service.get_next_question(
             db,
-            domain=interview.domain,
+            domain=interview.domain or "Software Engineering",
             difficulty=current_difficulty,
-            exclude_ids=asked_questions
+            exclude_ids=asked_questions,
+            interview_type=interview.interview_type or "technical",
+            target_role=interview.target_role or "",
+            asked_question_texts=asked_question_texts,
         )
 
         if not question:
             raise InterviewError("No more questions available for this domain")
 
         return question
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # Answer Submission — core evaluation loop
@@ -207,6 +213,10 @@ class InterviewService:
             })
 
         state["asked_questions"].append(str(request.question_id))
+        # Store the actual question text so the LLM can avoid repeating it
+        asked_question_texts: list[str] = state.get("asked_question_texts", [])
+        asked_question_texts.append(question.question_text)
+        state["asked_question_texts"] = asked_question_texts
         state["current_difficulty"] = new_difficulty
         state["scores_history"] = scores_history
         state["difficulty_history"] = difficulty_history
