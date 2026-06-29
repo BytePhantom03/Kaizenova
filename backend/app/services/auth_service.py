@@ -103,7 +103,7 @@ class AuthService:
         
         await redis.delete(f"pwd_reset:{request.token}")
 
-    async def authenticate_oauth(self, db: AsyncSession, code: str, redirect_uri: str) -> Tuple[str, str, int, bool]:
+    async def authenticate_oauth(self, db: AsyncSession, code: str, redirect_uri: str):
         logger.info(f"Mock OAuth exchange code={code}")
         email = "oauthuser@example.com"
         oauth_id = "google12345"
@@ -126,6 +126,6 @@ class AuthService:
         access_token = create_access_token(data={"sub": str(user.id)})
         refresh_token = create_refresh_token(data={"sub": str(user.id)})
         
-        return access_token, refresh_token, settings.security.ACCESS_TOKEN_EXPIRE_MINUTES * 60, is_new_user
+        return access_token, refresh_token, settings.security.ACCESS_TOKEN_EXPIRE_MINUTES * 60, is_new_user, user
 
 auth_service = AuthService()

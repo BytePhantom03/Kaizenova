@@ -129,7 +129,7 @@ async def oauth_google(
     db: AsyncSession = Depends(get_db)
 ):
     """Exchange Google OAuth code for tokens."""
-    access_token, refresh_token, expires_in, is_new_user = await auth_service.authenticate_oauth(
+    access_token, refresh_token, expires_in, is_new_user, user = await auth_service.authenticate_oauth(
         db, request.code, request.redirect_uri
     )
     
@@ -146,5 +146,6 @@ async def oauth_google(
         "access_token": access_token,
         "token_type": "bearer",
         "expires_in": expires_in,
-        "is_new_user": is_new_user
+        "is_new_user": is_new_user,
+        "user": user
     }
