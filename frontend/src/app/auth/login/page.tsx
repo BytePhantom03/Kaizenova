@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { api } from "@/lib/axios";
+import { useGoogleLogin } from '@react-oauth/google';
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -40,25 +41,32 @@ function LoginForm() {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    setError("");
-
-    try {
-      const res = await api.post("/auth/oauth/google", { 
-        code: "mock_google_code_123", 
-        redirect_uri: window.location.origin 
-      });
-      login(res.data.user, res.data.access_token);
-      router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Google Sign-In failed.");
+  const handleGoogleLogin = useGoogleLogin({
+    flow: 'auth-code',
+    onSuccess: async (codeResponse) => {
+      setIsLoading(true);
+      setError("");
+      try {
+        const res = await api.post("/auth/oauth/google", { 
+          code: codeResponse.code, 
+          redirect_uri: window.location.origin 
+        });
+        login(res.data.user, res.data.access_token);
+        router.push("/dashboard");
+      } catch (err: any) {
+        setError(err.response?.data?.detail || "Google Sign-In failed.");
+        setShakeForm(true);
+        setTimeout(() => setShakeForm(false), 600);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    onError: (errorResponse) => {
+      setError("Google Sign-In was cancelled or failed.");
       setShakeForm(true);
       setTimeout(() => setShakeForm(false), 600);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  });
 
   const featureBullets = [
     { icon: <BrainCircuit className="h-4 w-4 text-primary" />, text: "AI-powered evaluation", num: "01" },

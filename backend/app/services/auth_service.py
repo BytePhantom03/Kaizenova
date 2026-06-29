@@ -1,5 +1,6 @@
 import uuid
 from typing import Tuple, Any
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Type alias for mock redis client
@@ -104,10 +105,50 @@ class AuthService:
         await redis.delete(f"pwd_reset:{request.token}")
 
     async def authenticate_oauth(self, db: AsyncSession, code: str, redirect_uri: str):
-        logger.info(f"Mock OAuth exchange code={code}")
-        email = "oauthuser@example.com"
-        oauth_id = "google12345"
+        logger.info(f"Real OAuth exchange started")
         
+        client_id = settings.oauth.GOOGLE_CLIENT_ID
+        client_secret = settings.oauth.GOOGLE_CLIENT_SECRET.get_secret_value() if hasattr(settings.oauth.GOOGLE_CLIENT_SECRET, 'get_secret_value') else settings.oauth.GOOGLE_CLIENT_SECRET
+        
+        if not client_id or not client_secret or client_id == "your_google_client_id_here":
+            raise AuthError("Google OAuth is not configured on the backend.", 500)
+            
+        async with httpx.AsyncClient() as client:
+            # 1. Exchange code for access token
+            token_url = "https://oauth2.googleapis.com/token"
+            data = {
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            }
+            token_res = await client.post(token_url, data=data)
+            if token_res.status_code != 200:
+                logger.error(f"Failed to fetch Google token: {token_res.text}")
+                raise AuthError("Failed to authenticate with Google", 401)
+                
+            token_data = token_res.json()
+            google_access_token = token_data.get("access_token")
+            
+            # 2. Fetch user profile
+            userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+            userinfo_res = await client.get(
+                userinfo_url, 
+                headers={"Authorization": f"Bearer {google_access_token}"}
+            )
+            if userinfo_res.status_code != 200:
+                logger.error(f"Failed to fetch Google userinfo: {userinfo_res.text}")
+                raise AuthError("Failed to fetch user profile from Google", 401)
+                
+            user_info = userinfo_res.json()
+            email = user_info.get("email")
+            oauth_id = user_info.get("id")
+            full_name = user_info.get("name") or "Google User"
+            
+        if not email or not oauth_id:
+            raise AuthError("Incomplete profile returned from Google", 401)
+            
         is_new_user = False
         user = await user_repo.get_by_email(db, email)
         if not user:
@@ -120,7 +161,7 @@ class AuthService:
             })
             await profile_repo.create(db, {
                 "user_id": user.id,
-                "full_name": "OAuth User"
+                "full_name": full_name
             })
             
         access_token = create_access_token(data={"sub": str(user.id)})

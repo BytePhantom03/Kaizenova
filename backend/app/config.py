@@ -53,6 +53,12 @@ class EmailSettings(BaseSettings):
     
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+class OAuthSettings(BaseSettings):
+    GOOGLE_CLIENT_ID: str = Field(default="")
+    GOOGLE_CLIENT_SECRET: SecretStr = Field(default="")
+    
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
 class AppSettings(BaseSettings):
     PROJECT_NAME: str = "Kaizenova Backend"
     VERSION: str = "1.0.0"
@@ -67,5 +73,6 @@ class Config:
     security = SecuritySettings()
     ai = AISettings()
     email = EmailSettings()
+    oauth = OAuthSettings()
 
 settings = Config()
