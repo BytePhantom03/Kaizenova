@@ -7,12 +7,14 @@ import {
   LayoutDashboard, BrainCircuit, TrendingUp, Settings,
   LogOut, ChevronLeft, ChevronRight as ChevronRightIcon,
   Flame, Target, Sparkles, Clock, BarChart3, Zap, Menu, X,
-  User, Save, CheckCircle2, AlertCircle, Plus, Trash2, BookOpen
+  User, Save, CheckCircle2, AlertCircle, Plus, Trash2, BookOpen,
+  Mail, Briefcase, Building2, GraduationCap, Code2, Globe
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/axios";
 import Link from "next/link";
+import { Input } from "@/components/ui/Input";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type Tab = "dashboard" | "analytics" | "growth" | "settings";
@@ -199,7 +201,7 @@ function Sidebar({ collapsed, onToggle, activeTab, onTabChange }: {
               key={item.label}
               onClick={() => item.tab ? onTabChange(item.tab) : router.push(item.href!)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group
-                ${isActive ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
+                ${isActive ? 'bg-primary/10 text-primary border border-primary/20 sidebar-active-bar' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
             >
               <span className={`flex-shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`}>
                 {item.icon}
@@ -644,22 +646,22 @@ function SettingsTab() {
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
-            { label: "Full Name", key: "full_name", placeholder: "Your name" },
-            { label: "Target Role", key: "target_role", placeholder: "e.g. Software Engineer" },
-            { label: "Target Company", key: "target_company", placeholder: "e.g. Google" },
-            { label: "Education", key: "education", placeholder: "e.g. B.Tech Computer Science" },
-            { label: "Experience Level", key: "experience_level", placeholder: "Entry / Mid / Senior" },
-            { label: "LinkedIn URL", key: "linkedin_url", placeholder: "https://linkedin.com/in/..." },
-            { label: "GitHub URL", key: "github_url", placeholder: "https://github.com/..." },
+            { label: "Full Name", key: "full_name", placeholder: "Your name", icon: <User className="h-4 w-4" /> },
+            { label: "Target Role", key: "target_role", placeholder: "e.g. Software Engineer", icon: <Briefcase className="h-4 w-4" /> },
+            { label: "Target Company", key: "target_company", placeholder: "e.g. Google", icon: <Building2 className="h-4 w-4" /> },
+            { label: "Education", key: "education", placeholder: "e.g. B.Tech Computer Science", icon: <GraduationCap className="h-4 w-4" /> },
+            { label: "Experience Level", key: "experience_level", placeholder: "Entry / Mid / Senior", icon: <TrendingUp className="h-4 w-4" /> },
+            { label: "LinkedIn URL", key: "linkedin_url", placeholder: "https://linkedin.com/in/...", icon: <Globe className="h-4 w-4" /> },
+            { label: "GitHub URL", key: "github_url", placeholder: "https://github.com/...", icon: <Code2 className="h-4 w-4" /> },
           ].map(f => (
             <div key={f.key}>
               <label className="text-xs font-medium text-muted-foreground block mb-1.5">{f.label}</label>
-              <input
+              <Input
                 type="text"
                 value={(profile as any)[f.key] || ""}
                 onChange={e => setProfile(p => ({ ...p, [f.key]: e.target.value }))}
                 placeholder={f.placeholder}
-                className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                icon={f.icon}
               />
             </div>
           ))}
@@ -670,7 +672,7 @@ function SettingsTab() {
               value={profile.bio || ""}
               onChange={e => setProfile(p => ({ ...p, bio: e.target.value }))}
               placeholder="A short description about yourself..."
-              className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none"
+              className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none focus:shadow-[0_0_0_1px_rgba(0,240,255,0.3),0_0_12px_rgba(0,240,255,0.1)]"
             />
           </div>
         </div>
@@ -695,13 +697,13 @@ function SettingsTab() {
           )}
         </div>
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             value={newSkill}
             onChange={e => setNewSkill(e.target.value)}
             onKeyDown={e => e.key === "Enter" && addSkill()}
             placeholder="Add a skill (e.g. Python, React)"
-            className="flex-1 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+            icon={<Sparkles className="h-4 w-4" />}
           />
           <Button onClick={addSkill} size="sm" variant="outline" className="gap-1.5">
             <Plus className="h-4 w-4" /> Add
@@ -741,8 +743,8 @@ function SettingsTab() {
   );
 }
 
-function DashboardTab({ stats, loading, router, firstName, getGreeting }: {
-  stats: DashboardStats; loading: boolean; router: any; firstName: string; getGreeting: () => string;
+function DashboardTab({ stats, loading, router, firstName, getGreeting, onTabChange }: {
+  stats: DashboardStats; loading: boolean; router: any; firstName: string; getGreeting: () => string; onTabChange?: (tab: Tab) => void;
 }) {
   const [recUrl, setRecUrl] = useState("/interview/setup");
 
@@ -834,7 +836,29 @@ function DashboardTab({ stats, loading, router, firstName, getGreeting }: {
                   <div className="text-sm font-medium text-foreground">Quick Interview</div>
                   <div className="text-xs text-muted-foreground">Start a practice session</div>
                 </div>
-                <ChevronRightIcon className="h-4 w-4 text-muted-foreground ml-auto" />
+                <ChevronRightIcon className="h-4 w-4 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
+              </button>
+              <button onClick={() => onTabChange && onTabChange('analytics')}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-surface hover:bg-surface-elevated hover:border-secondary/30 transition-all group">
+                <div className="h-10 w-10 rounded-lg bg-secondary/10 flex items-center justify-center group-hover:bg-secondary/20 transition-colors">
+                  <BarChart3 className="h-5 w-5 text-secondary" />
+                </div>
+                <div className="text-left">
+                  <div className="text-sm font-medium text-foreground">View Analytics</div>
+                  <div className="text-xs text-muted-foreground">Performance breakdown</div>
+                </div>
+                <ChevronRightIcon className="h-4 w-4 text-muted-foreground ml-auto group-hover:text-secondary transition-colors" />
+              </button>
+              <button onClick={() => onTabChange && onTabChange('growth')}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-surface hover:bg-surface-elevated hover:border-success/30 transition-all group">
+                <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center group-hover:bg-success/20 transition-colors">
+                  <TrendingUp className="h-5 w-5 text-success" />
+                </div>
+                <div className="text-left">
+                  <div className="text-sm font-medium text-foreground">Growth Plan</div>
+                  <div className="text-xs text-muted-foreground">AI-powered coaching</div>
+                </div>
+                <ChevronRightIcon className="h-4 w-4 text-muted-foreground ml-auto group-hover:text-success transition-colors" />
               </button>
             </div>
           </div>
@@ -845,7 +869,7 @@ function DashboardTab({ stats, loading, router, firstName, getGreeting }: {
             <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/10 blur-[60px] pointer-events-none" />
             <div className="relative z-10">
               <div className="flex items-center gap-2 mb-3">
-                <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
+                <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center breathe-glow">
                   <Sparkles className="h-4 w-4 text-primary" />
                 </div>
                 <div>
@@ -1065,7 +1089,7 @@ export default function Dashboard() {
               transition={{ duration: 0.25 }}
             >
               {activeTab === "dashboard" && (
-                <DashboardTab stats={stats} loading={loading} router={router} firstName={firstName} getGreeting={getGreeting} />
+                <DashboardTab stats={stats} loading={loading} router={router} firstName={firstName} getGreeting={getGreeting} onTabChange={(t) => { setActiveTab(t); setMobileMenuOpen(false); }} />
               )}
               {activeTab === "analytics" && <AnalyticsTab />}
               {activeTab === "growth" && <GrowthTab />}

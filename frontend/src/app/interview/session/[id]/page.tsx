@@ -252,28 +252,32 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "en-US";
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
+      // Split text by punctuation to force natural pauses in the TTS engine
+      const chunks = text.match(/[^.?!:;,\n]+[.?!:;,\n]*/g) || [text];
+      
+      chunks.forEach((chunk, index) => {
+        const utterance = new SpeechSynthesisUtterance(chunk.trim());
+        utterance.lang = "en-US";
+        utterance.rate = 0.95; // Slightly slower for clearer enunciation
+        utterance.pitch = 1.0;
 
-      utterance.onend = () => {
-        if (mounted) {
-          setIsPlayingTTS(false);
-          startRecording();
+        if (index === chunks.length - 1) {
+          utterance.onend = () => {
+            if (mounted) {
+              setIsPlayingTTS(false);
+              startRecording();
+            }
+          };
+          utterance.onerror = () => {
+            if (mounted) {
+              setIsPlayingTTS(false);
+              startRecording();
+            }
+          };
         }
-      };
 
-      utterance.onerror = (e) => {
-        // Silently catch TTS error as it usually means a cancel or autoplay restriction
-        // console.error("TTS failed:", e);
-        if (mounted) {
-          setIsPlayingTTS(false);
-          startRecording();
-        }
-      };
-
-      window.speechSynthesis.speak(utterance);
+        window.speechSynthesis.speak(utterance);
+      });
     };
 
     if (phase === "answering" && question?.question_text) {
@@ -640,8 +644,13 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
                     <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
                       className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-danger/10 border border-danger/30 text-danger text-xs font-medium"
                     >
-                      <div className="h-2 w-2 rounded-full bg-danger animate-pulse" />
-                      Listening (Auto-submits after 10s silence)
+                      {/* Waveform visualizer */}
+                      <div className="flex items-end gap-0.5 h-3">
+                        {[...Array(5)].map((_, i) => (
+                          <div key={i} className="w-0.5 bg-danger rounded-full waveform-bar" style={{ minHeight: '3px' }} />
+                        ))}
+                      </div>
+                      Listening (Auto-submits after 5s silence)
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -699,6 +708,15 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
                   {isRecording ? "Stop Listening & Submit" : "Submit Answer"} <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
+              {/* Keyboard shortcut hint */}
+              <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground/60">
+                <span>Press</span>
+                <kbd className="kbd">Enter</kbd>
+                <span>to submit</span>
+                <span className="mx-1">·</span>
+                <kbd className="kbd">Esc</kbd>
+                <span>to skip</span>
+              </div>
             </motion.div>
           )}
 
@@ -722,22 +740,30 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
                 <div className="h-24 w-24 rounded-3xl bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30 flex items-center justify-center">
                   <Trophy className="h-12 w-12 text-primary" />
                 </div>
-                {/* Sparkle particles */}
-                {[...Array(6)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    className="absolute h-2 w-2 rounded-full bg-primary"
-                    initial={{ opacity: 0, scale: 0 }}
-                    animate={{
-                      opacity: [0, 1, 0],
-                      scale: [0, 1, 0],
-                      x: [0, (Math.random() - 0.5) * 100],
-                      y: [0, (Math.random() - 0.5) * 100],
-                    }}
-                    transition={{ duration: 1, delay: 0.5 + i * 0.1 }}
-                    style={{ left: '50%', top: '50%' }}
-                  />
-                ))}
+                {/* Confetti particles */}
+                {[...Array(12)].map((_, i) => {
+                  const colors = ['bg-primary', 'bg-secondary', 'bg-success', 'bg-warning', 'bg-info'];
+                  const angle = (i / 12) * 360;
+                  // Use deterministic value instead of Math.random() for react-hooks/purity
+                  const radius = 60 + ((i * 17) % 40);
+                  const x = Math.cos(angle * Math.PI / 180) * radius;
+                  const y = Math.sin(angle * Math.PI / 180) * radius;
+                  return (
+                    <motion.div
+                      key={i}
+                      className={`absolute h-1.5 w-1.5 rounded-full ${colors[i % colors.length]}`}
+                      initial={{ opacity: 0, scale: 0, x: 0, y: 0 }}
+                      animate={{
+                        opacity: [0, 1, 1, 0],
+                        scale: [0, 1.2, 1, 0.5],
+                        x: [0, x * 0.5, x],
+                        y: [0, y * 0.5, y],
+                      }}
+                      transition={{ duration: 1.2, delay: 0.3 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+                      style={{ left: '50%', top: '50%' }}
+                    />
+                  );
+                })}
               </motion.div>
 
               <motion.div

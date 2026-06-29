@@ -4,20 +4,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Logo } from "@/components/ui/Logo";
-import { User, Mail, Lock, Eye, EyeOff, BrainCircuit, BarChart3, Sparkles } from "lucide-react";
+import { User, Mail, Lock, Eye, EyeOff, BrainCircuit, BarChart3, Sparkles, Check } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/axios";
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = useMemo(() => [
-    password.length >= 8,
-    /[A-Z]/.test(password),
-    /[a-z]/.test(password),
-    /[0-9]/.test(password),
+    { label: "At least 8 characters", met: password.length >= 8 },
+    { label: "One uppercase letter", met: /[A-Z]/.test(password) },
+    { label: "One lowercase letter", met: /[a-z]/.test(password) },
+    { label: "One number", met: /[0-9]/.test(password) },
   ], [password]);
 
-  const score = checks.filter(Boolean).length;
+  const score = checks.filter(c => c.met).length;
   const labels = ["", "Weak", "Fair", "Good", "Strong"];
   const colors = ["", "bg-danger", "bg-warning", "bg-yellow-400", "bg-success"];
   const textColors = ["", "text-danger", "text-warning", "text-yellow-400", "text-success"];
@@ -30,11 +30,12 @@ function PasswordStrength({ password }: { password: string }) {
       animate={{ opacity: 1, height: "auto" }}
       className="mt-2"
     >
+      {/* Strength bar */}
       <div className="flex gap-1 mb-1">
         {[1, 2, 3, 4].map(i => (
           <div key={i} className="h-1 flex-1 rounded-full bg-border overflow-hidden">
             <motion.div
-              className={`h-full rounded-full ${i <= score ? colors[score] : ""}`}
+              className={`h-full rounded-full transition-all duration-300 ${i <= score ? colors[score] : ""}`}
               initial={{ width: 0 }}
               animate={{ width: i <= score ? "100%" : "0%" }}
               transition={{ duration: 0.3, delay: i * 0.05 }}
@@ -42,7 +43,46 @@ function PasswordStrength({ password }: { password: string }) {
           </div>
         ))}
       </div>
-      <span className={`text-xs font-medium ${textColors[score]}`}>{labels[score]}</span>
+
+      {/* Strength label with color transition */}
+      <span className={`text-xs font-medium transition-colors duration-300 ${textColors[score]}`}>
+        {labels[score]}
+      </span>
+
+      {/* Animated password criteria checklist */}
+      <div className="mt-2.5 space-y-1.5">
+        {checks.map((check, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="relative h-4 w-4 flex items-center justify-center flex-shrink-0">
+              <AnimatePresence mode="wait">
+                {check.met ? (
+                  <motion.div
+                    key="check"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                    className="h-4 w-4 rounded-full bg-success/20 flex items-center justify-center"
+                  >
+                    <Check className="h-2.5 w-2.5 text-success" strokeWidth={3} />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="empty"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    className="h-3 w-3 rounded-full border border-border"
+                  />
+                )}
+              </AnimatePresence>
+            </div>
+            <span className={`text-xs transition-colors duration-300 ${check.met ? "text-success" : "text-muted-foreground"}`}>
+              {check.label}
+            </span>
+          </div>
+        ))}
+      </div>
     </motion.div>
   );
 }
@@ -88,7 +128,8 @@ export default function RegisterPage() {
     <div className="flex min-h-screen bg-background">
       {/* Left Panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-secondary/8 via-background to-primary/8" />
+        {/* Gradient background with noise texture */}
+        <div className="absolute inset-0 bg-gradient-to-br from-secondary/8 via-background to-primary/8 noise-bg" />
         <div className="absolute top-[20%] left-[10%] h-[300px] w-[300px] rounded-full bg-secondary/10 blur-[100px]"
              style={{ animation: 'meshFloat1 20s ease-in-out infinite' }} />
         <div className="absolute bottom-[20%] right-[10%] h-[250px] w-[250px] rounded-full bg-primary/10 blur-[80px]"
@@ -138,7 +179,8 @@ export default function RegisterPage() {
             <Logo size="md" />
           </div>
 
-          <div className="rounded-2xl border border-border bg-card/30 p-8 backdrop-blur-xl shadow-2xl">
+          {/* Form card with card-shine effect */}
+          <div className="rounded-2xl border border-border bg-card/30 p-8 backdrop-blur-xl shadow-2xl card-shine">
             <div className="mb-8 text-center">
               <h2 className="text-2xl font-bold text-foreground">Create your account</h2>
               <p className="text-sm text-muted-foreground mt-1">Start your interview preparation journey</p>
@@ -210,7 +252,6 @@ export default function RegisterPage() {
                   minLength={8}
                 />
                 <PasswordStrength password={formData.password} />
-                <p className="text-xs text-muted-foreground mt-1">Must be at least 8 characters with 1 number and 1 uppercase letter.</p>
               </div>
 
               {/* Terms */}

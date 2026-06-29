@@ -54,6 +54,8 @@ const DIFFICULTIES = [
 
 const STEP_LABELS = ["Type", "Details", "Configure"];
 
+const DURATION_TICKS = [15, 30, 45, 60];
+
 const pageTransition = {
   initial: { opacity: 0, x: 40 },
   animate: { opacity: 1, x: 0 },
@@ -91,6 +93,7 @@ function InterviewSetupInner() {
     const difficulty = searchParams.get("difficulty");
     const role = searchParams.get("role");
     if (recommended === "true") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(f => ({
         ...f,
         domain: domain || f.domain,
@@ -123,6 +126,9 @@ function InterviewSetupInner() {
     }
   };
 
+  /* ---------- Progress bar width fraction ---------- */
+  const progressFraction = (step - 1) / (STEP_LABELS.length - 1);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Ambient glows */}
@@ -145,31 +151,63 @@ function InterviewSetupInner() {
             <span className="font-bold text-foreground">New Interview</span>
           </div>
 
-          {/* Step progress bar */}
-          <div className="ml-auto flex items-center gap-3">
+          {/* ── Connected Step Progress Bar ── */}
+          <div className="ml-auto flex items-center">
             {STEP_LABELS.map((label, i) => {
               const stepNum = i + 1;
               const isActive = step === stepNum;
               const isComplete = step > stepNum;
 
               return (
-                <div key={i} className="flex items-center gap-2">
+                <React.Fragment key={i}>
+                  {/* Connector line between steps */}
                   {i > 0 && (
-                    <div className={`hidden sm:block h-px w-6 transition-colors duration-300 ${isComplete ? 'bg-primary' : 'bg-border'}`} />
-                  )}
-                  <div className="flex items-center gap-1.5">
-                    <div className={`h-7 w-7 rounded-lg text-xs font-bold flex items-center justify-center transition-all duration-300 ${
-                      isComplete ? 'bg-primary text-primary-foreground' :
-                      isActive ? 'bg-primary/20 text-primary border border-primary/40' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
-                      {isComplete ? <Check className="h-3.5 w-3.5" /> : stepNum}
+                    <div className="hidden sm:block relative h-[3px] w-10 mx-0.5 rounded-full overflow-hidden bg-border">
+                      <motion.div
+                        className="absolute inset-y-0 left-0 rounded-full"
+                        style={{
+                          background: 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))',
+                        }}
+                        initial={false}
+                        animate={{ width: isComplete || isActive ? '100%' : '0%' }}
+                        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                      />
                     </div>
-                    <span className={`hidden sm:inline text-xs font-medium transition-colors ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  )}
+
+                  {/* Step circle + label */}
+                  <div className="flex items-center gap-1.5">
+                    <motion.div
+                      className={`relative h-8 w-8 rounded-full text-xs font-bold flex items-center justify-center transition-colors duration-300 ${
+                        isComplete
+                          ? 'bg-primary text-primary-foreground shadow-[0_0_12px_rgba(0,240,255,0.3)]'
+                          : isActive
+                            ? 'bg-primary/20 text-primary border-2 border-primary/60 breathe-glow'
+                            : 'bg-muted text-muted-foreground border border-border'
+                      }`}
+                      initial={false}
+                      animate={isComplete ? { scale: [1, 1.15, 1] } : { scale: 1 }}
+                      transition={{ duration: 0.35, ease: 'easeOut' }}
+                    >
+                      {isComplete ? (
+                        <motion.div
+                          initial={{ scale: 0, rotate: -90 }}
+                          animate={{ scale: 1, rotate: 0 }}
+                          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                        >
+                          <Check className="h-4 w-4" />
+                        </motion.div>
+                      ) : (
+                        stepNum
+                      )}
+                    </motion.div>
+                    <span className={`hidden sm:inline text-xs font-medium transition-colors duration-200 ${
+                      isActive ? 'text-foreground' : isComplete ? 'text-primary/70' : 'text-muted-foreground'
+                    }`}>
                       {label}
                     </span>
                   </div>
-                </div>
+                </React.Fragment>
               );
             })}
           </div>
@@ -212,28 +250,54 @@ function InterviewSetupInner() {
               <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Choose Interview Type</h1>
               <p className="text-muted-foreground mb-8">Select the type of interview you want to practice.</p>
               <div className="grid gap-4">
-                {INTERVIEW_TYPES.map((type) => (
-                  <motion.button
-                    key={type.id}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.995 }}
-                    onClick={() => { setForm({ ...form, interview_type: type.id }); setStep(2); }}
-                    className={`flex items-center gap-5 p-6 rounded-2xl border text-left transition-all duration-300 ${type.shadow} ${
-                      form.interview_type === type.id
-                        ? `${type.bg} border-opacity-100`
-                        : `border-border bg-card/30 ${type.hoverBorder} hover:bg-card/50`
-                    }`}
-                  >
-                    <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl border ${type.bg} ${type.color} flex-shrink-0 transition-transform duration-300 group-hover:scale-110`}>
-                      {type.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className={`font-semibold text-lg ${type.color}`}>{type.label}</div>
-                      <div className="text-sm text-muted-foreground">{type.description}</div>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                  </motion.button>
-                ))}
+                {INTERVIEW_TYPES.map((type) => {
+                  const isSelected = form.interview_type === type.id;
+                  return (
+                    <motion.button
+                      key={type.id}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.995 }}
+                      onClick={() => { setForm({ ...form, interview_type: type.id }); setStep(2); }}
+                      className={`relative flex items-center gap-5 p-6 rounded-2xl border text-left transition-all duration-300 ${type.shadow} ${
+                        isSelected
+                          ? `${type.bg} border-opacity-100`
+                          : `border-border bg-card/30 ${type.hoverBorder} hover:bg-card/50`
+                      }`}
+                    >
+                      {/* Gradient border glow when selected */}
+                      {isSelected && (
+                        <span
+                          className="pointer-events-none absolute inset-0 rounded-2xl gradient-border-animated opacity-60"
+                          style={{
+                            WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                            WebkitMaskComposite: 'xor',
+                            maskComposite: 'exclude',
+                            padding: '1.5px',
+                          }}
+                          aria-hidden
+                        />
+                      )}
+                      {/* Subtle glow backdrop when selected */}
+                      {isSelected && (
+                        <span
+                          className="pointer-events-none absolute inset-0 rounded-2xl"
+                          style={{
+                            boxShadow: '0 0 28px rgba(0,240,255,0.12), inset 0 0 28px rgba(0,240,255,0.04)',
+                          }}
+                          aria-hidden
+                        />
+                      )}
+                      <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl border ${type.bg} ${type.color} flex-shrink-0 transition-transform duration-300 group-hover:scale-110`}>
+                        {type.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className={`font-semibold text-lg ${type.color}`}>{type.label}</div>
+                        <div className="text-sm text-muted-foreground">{type.description}</div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    </motion.button>
+                  );
+                })}
               </div>
             </motion.div>
           )}
@@ -345,10 +409,36 @@ function InterviewSetupInner() {
                   </div>
                 </div>
 
+                {/* ── Duration slider with tick marks ── */}
                 <div>
                   <label className="text-sm font-medium text-foreground block mb-3">
                     Duration: <span className="text-primary font-bold">{form.duration_minutes} minutes</span>
                   </label>
+
+                  {/* Tick marks above slider */}
+                  <div className="relative w-full h-5 mb-1">
+                    {DURATION_TICKS.map((v) => {
+                      const pct = ((v - 15) / (60 - 15)) * 100;
+                      const isCurrentOrPast = form.duration_minutes >= v;
+                      return (
+                        <div
+                          key={v}
+                          className="absolute flex flex-col items-center -translate-x-1/2"
+                          style={{ left: `${pct}%` }}
+                        >
+                          <span className={`text-[10px] font-medium tabular-nums transition-colors duration-200 ${
+                            form.duration_minutes === v ? 'text-primary' : 'text-muted-foreground/60'
+                          }`}>
+                            {v}
+                          </span>
+                          <span className={`mt-0.5 h-1.5 w-1.5 rounded-full transition-all duration-200 ${
+                            isCurrentOrPast ? 'bg-primary shadow-[0_0_4px_rgba(0,240,255,0.4)]' : 'bg-border'
+                          }`} />
+                        </div>
+                      );
+                    })}
+                  </div>
+
                   <div className="relative">
                     <input
                       type="range"
@@ -361,7 +451,7 @@ function InterviewSetupInner() {
                     />
                   </div>
                   <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                    {[15, 30, 45, 60].map(v => (
+                    {DURATION_TICKS.map(v => (
                       <button
                         key={v}
                         onClick={() => setForm({ ...form, duration_minutes: v })}
@@ -373,7 +463,7 @@ function InterviewSetupInner() {
                   </div>
                 </div>
 
-                {/* Summary card */}
+                {/* ── Summary card with staggered row animations ── */}
                 <div className="rounded-2xl border border-border bg-card/30 backdrop-blur-sm p-5 space-y-3 text-sm">
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles className="h-4 w-4 text-primary" />
@@ -386,11 +476,21 @@ function InterviewSetupInner() {
                     ["Domain", form.domain],
                     ["Difficulty", form.difficulty_setting],
                     ["Duration", `${form.duration_minutes} min`],
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex justify-between items-center py-1">
+                  ].map(([label, value], i) => (
+                    <motion.div
+                      key={label}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        delay: i * 0.05,
+                        duration: 0.3,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
+                      className="flex justify-between items-center py-1"
+                    >
                       <span className="text-muted-foreground">{label}</span>
                       <span className="text-foreground font-medium capitalize">{value}</span>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
 
@@ -418,4 +518,3 @@ export default function InterviewSetup() {
     </Suspense>
   );
 }
-
