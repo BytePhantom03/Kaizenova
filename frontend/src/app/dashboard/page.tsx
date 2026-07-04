@@ -960,7 +960,7 @@ function DashboardTab({ stats, loading, router, firstName, getGreeting, onTabCha
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated, _hasHydrated, logout } = useAuthStore();
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats>(defaultStats);
   const [loading, setLoading] = useState(true);
@@ -969,6 +969,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
 
   useEffect(() => {
+    if (!_hasHydrated) return;
     if (!isAuthenticated) { router.push("/auth/login"); return; }
     const fetchStats = async () => {
       try {
@@ -981,9 +982,9 @@ export default function Dashboard() {
       }
     };
     fetchStats();
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, _hasHydrated, router]);
 
-  if (!isAuthenticated || !user) return (
+  if (!_hasHydrated || !isAuthenticated || !user) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">
         <div className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />

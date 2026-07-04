@@ -64,7 +64,7 @@ const pageTransition = {
 };
 
 function InterviewSetupInner() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, _hasHydrated } = useAuthStore();
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -82,8 +82,9 @@ function InterviewSetupInner() {
   const searchParams = useSearchParams();
 
   React.useEffect(() => {
+    if (!_hasHydrated) return;
     if (!isAuthenticated) router.push("/auth/login");
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, _hasHydrated, router]);
 
   // Pre-fill from recommendation query params
   useEffect(() => {

@@ -147,7 +147,7 @@ function EvaluatingPhase({ isTranscribing = false }: { isTranscribing?: boolean 
 
 export default function InterviewSession({ params }: { params: Promise<{ id: string }> }) {
   const { id: interviewId } = use(params);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, _hasHydrated } = useAuthStore();
   const router = useRouter();
 
   const [phase, setPhase] = useState<Phase>("loading_question");
@@ -231,9 +231,10 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
   }, [interviewId]);
 
   useEffect(() => {
+    if (!_hasHydrated) return;
     if (!isAuthenticated) { router.push("/auth/login"); return; }
     loadNextQuestion();
-  }, []);
+  }, [_hasHydrated, isAuthenticated, loadNextQuestion, router]);
 
   // Play TTS when a new question starts
   useEffect(() => {

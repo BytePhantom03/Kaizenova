@@ -11,6 +11,8 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  _hasHydrated: boolean;
+  setHasHydrated: (state: boolean) => void;
   login: (user: User, token: string) => void;
   logout: () => void;
 }
@@ -21,6 +23,8 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
+      _hasHydrated: false,
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
       login: (user, token) => {
         if (typeof window !== 'undefined') {
           localStorage.setItem('token', token);
@@ -36,12 +40,15 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'kaizenova-auth',
-      // Only persist user and token, not callbacks
+      // Only persist user and token, not callbacks or hydration status
       partialize: (state) => ({
         user: state.user,
         token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      }
     }
   )
 );

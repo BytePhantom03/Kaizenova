@@ -178,7 +178,7 @@ function ReportSkeleton() {
 
 export default function ReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: reportId } = use(params);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, _hasHydrated } = useAuthStore();
   const router = useRouter();
   const { toast } = useToast();
   
@@ -187,6 +187,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
+    if (!_hasHydrated) return;
     if (!isAuthenticated) { router.push("/auth/login"); return; }
     
     const fetchReport = async () => {
@@ -200,7 +201,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
       }
     };
     fetchReport();
-  }, [isAuthenticated, reportId, router]);
+  }, [_hasHydrated, isAuthenticated, reportId, router]);
 
   const handleShareReport = async () => {
     try {
