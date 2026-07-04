@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/ui/Logo";
 import {
   BrainCircuit, Code2, Users, Layers, ChevronRight, ArrowLeft,
-  Sparkles, Clock, Check
+  Sparkles, Clock, Check, UploadCloud, FileText, X, CheckCircle2
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
@@ -77,7 +77,14 @@ function InterviewSetupInner() {
     domain: "Software Engineering",
     difficulty_setting: "intermediate",
     duration_minutes: 30,
+    resume_id: null as string | null,
   });
+
+  // Resume upload state
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeStatus, setResumeStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [isDragging, setIsDragging] = useState(false);
+  const resumeInputRef = React.useRef<HTMLInputElement>(null);
 
   const searchParams = useSearchParams();
 
@@ -108,6 +115,28 @@ function InterviewSetupInner() {
   }, [searchParams]);
 
 
+  const handleResumeUpload = async (file: File) => {
+    if (!file) return;
+    const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
+    if (!allowed.includes(file.type)) {
+      setResumeStatus("error");
+      return;
+    }
+    setResumeFile(file);
+    setResumeStatus("uploading");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.post("/resumes/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setForm(f => ({ ...f, resume_id: res.data.resume_id }));
+      setResumeStatus("done");
+    } catch {
+      setResumeStatus("error");
+    }
+  };
+
   const handleStart = async () => {
     setIsLoading(true);
     setError("");
@@ -119,6 +148,7 @@ function InterviewSetupInner() {
         domain: form.domain,
         difficulty_setting: form.difficulty_setting,
         duration_minutes: form.duration_minutes,
+        resume_id: form.resume_id || null,
       });
       router.push(`/interview/session/${res.data.id}`);
     } catch (e: any) {
@@ -464,7 +494,95 @@ function InterviewSetupInner() {
                   </div>
                 </div>
 
-                {/* ── Summary card with staggered row animations ── */}
+                {/* ── Resume Upload ── */}
+                <div
+                  className={`relative rounded-2xl border-2 border-dashed transition-all duration-300 overflow-hidden
+                    ${ isDragging ? "border-primary bg-primary/10 scale-[1.01]" :
+                       resumeStatus === "done" ? "border-emerald-500/50 bg-emerald-500/5" :
+                       resumeStatus === "error" ? "border-red-500/40 bg-red-500/5" :
+                       "border-border/60 bg-card/20 hover:border-primary/40 hover:bg-primary/5"
+                    }`}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    const f = e.dataTransfer.files[0];
+                    if (f) handleResumeUpload(f);
+                  }}
+                >
+                  <input
+                    ref={resumeInputRef}
+                    type="file"
+                    accept=".pdf,.docx,.txt"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleResumeUpload(f); }}
+                  />
+
+                  {resumeStatus === "idle" || resumeStatus === "error" ? (
+                    <button
+                      type="button"
+                      onClick={() => resumeInputRef.current?.click()}
+                      className="w-full flex flex-col items-center gap-3 p-8 text-center cursor-pointer"
+                    >
+                      <div className="h-14 w-14 rounded-2xl border border-border/60 bg-card/50 flex items-center justify-center">
+                        <UploadCloud className={`h-7 w-7 ${resumeStatus === "error" ? "text-red-400" : "text-primary"}`} />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground">
+                          {resumeStatus === "error" ? "Upload failed — try again" : "Upload Your Resume"}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Drag & drop or click to browse &bull; PDF, DOCX, TXT
+                        </p>
+                        <p className="text-xs text-muted-foreground/60 mt-1">
+                          Questions will be tailored to your projects & tech stack
+                        </p>
+                      </div>
+                      <span className="px-4 py-1.5 rounded-lg border border-primary/40 bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors">
+                        Choose file
+                      </span>
+                    </button>
+                  ) : resumeStatus === "uploading" ? (
+                    <div className="flex items-center gap-4 p-6">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{resumeFile?.name}</p>
+                        <div className="mt-2 h-1.5 w-full bg-border/50 rounded-full overflow-hidden">
+                          <motion.div
+                            className="h-full rounded-full bg-gradient-to-r from-primary to-secondary"
+                            initial={{ width: "0%" }}
+                            animate={{ width: "85%" }}
+                            transition={{ duration: 1.5, ease: "easeInOut" }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Parsing resume...</p>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Done state */
+                    <div className="flex items-center gap-4 p-6">
+                      <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-emerald-400">Resume ready!</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{resumeFile?.name}</p>
+                      </div>
+                      <button
+                        onClick={() => { setResumeFile(null); setResumeStatus("idle"); setForm(f => ({ ...f, resume_id: null })); }}
+                        className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted/50"
+                        title="Remove resume"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Summary card ── */}
                 <div className="rounded-2xl border border-border bg-card/30 backdrop-blur-sm p-5 space-y-3 text-sm">
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles className="h-4 w-4 text-primary" />
@@ -477,6 +595,7 @@ function InterviewSetupInner() {
                     ["Domain", form.domain],
                     ["Difficulty", form.difficulty_setting],
                     ["Duration", `${form.duration_minutes} min`],
+                    ["Resume", resumeStatus === "done" ? resumeFile?.name ?? "Attached" : "Not uploaded (optional)"],
                   ].map(([label, value], i) => (
                     <motion.div
                       key={label}
@@ -490,7 +609,9 @@ function InterviewSetupInner() {
                       className="flex justify-between items-center py-1"
                     >
                       <span className="text-muted-foreground">{label}</span>
-                      <span className="text-foreground font-medium capitalize">{value}</span>
+                      <span className={`font-medium capitalize ${label === "Resume" && resumeStatus === "done" ? "text-emerald-400" : "text-foreground"}`}>
+                        {value}
+                      </span>
                     </motion.div>
                   ))}
                 </div>

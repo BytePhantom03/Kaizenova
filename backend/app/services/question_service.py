@@ -65,9 +65,11 @@ class QuestionService:
         interview_type: str = "technical",
         target_role: str = "",
         asked_question_texts: list[str] = None,
+        resume_context: str = "",
     ) -> Optional[Question]:
         """
         Generate a fresh question via LLM. Falls back to DB if generation fails.
+        resume_context: optional full text extracted from the candidate's resume.
         """
         exclude_ids = exclude_ids or []
         asked_texts = asked_question_texts or []
@@ -79,6 +81,7 @@ class QuestionService:
             interview_type=interview_type,
             target_role=target_role,
             asked_question_texts=asked_texts,
+            resume_context=resume_context,
         )
         if generated:
             return generated
@@ -106,6 +109,7 @@ class QuestionService:
         interview_type: str,
         target_role: str,
         asked_question_texts: list[str],
+        resume_context: str = "",
     ) -> Optional[Question]:
         """Use the LLM to generate a brand-new question. Returns a synthetic Question object."""
         type_instruction = TYPE_INSTRUCTIONS.get(
@@ -123,18 +127,33 @@ class QuestionService:
 
         role_context = f" for a {target_role} role" if target_role else ""
 
+        # ── Resume context injection ──────────────────────────────────────────
+        resume_section = ""
+        if resume_context and len(resume_context.strip()) > 50:
+            # Truncate to keep the prompt within token limits (~2000 chars of resume)
+            trimmed = resume_context.strip()[:2000]
+            resume_section = (
+                f"\n\nCANDIDATE RESUME (use this to personalise your question):\n"
+                f"--- BEGIN RESUME ---\n{trimmed}\n--- END RESUME ---\n"
+                f"Formulate a question that specifically references the candidate's "
+                f"listed projects, technologies, or experiences where relevant."
+            )
+
         prompt = (
             f"{type_instruction}\n\n"
             f"Domain: {domain}\n"
             f"Difficulty: {diff_label} (level {difficulty}/10)\n"
             f"Role context: {target_role or 'Software Engineer'}\n"
+            f"{resume_section}"
             f"{avoid_section}\n\n"
             f"Generate ONE concise, clear interview question{role_context}. "
             f"Return ONLY the question text — no preamble, no numbering, no explanation, no quotation marks."
         )
 
         system_prompt = (
-            "You are an expert technical interviewer. "
+            "You are an expert technical interviewer conducting a personalised interview. "
+            "When a candidate resume is provided, always tailor questions to their specific "
+            "projects, tech stack, and experience. "
             "You generate precise, realistic interview questions tailored to the given type, domain, and difficulty. "
             "You always return only the question itself with no surrounding text."
         )

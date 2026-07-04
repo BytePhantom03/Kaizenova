@@ -8,7 +8,7 @@ from app.repositories.interview_repository import interview_repo
 from app.repositories.answer_repository import answer_repo, answer_score_repo
 from app.repositories.question_repository import question_repo
 from app.repositories.analytics_repository import interview_report_repo
-from app.models.database.interview import Interview, Answer, AnswerScore
+from app.models.database.interview import Interview, Answer, AnswerScore, Resume
 from app.models.database.question import Question
 from app.models.database.analytics import Streak, DailyActivity
 from app.services.question_service import question_service
@@ -59,6 +59,15 @@ class InterviewService:
         # Track actual question texts to prevent LLM from repeating them
         asked_question_texts = state.get("asked_question_texts", [])
 
+        # ── Load resume context if available ─────────────────────────────────
+        resume_context = ""
+        if interview.resume_id:
+            result = await db.execute(select(Resume).where(Resume.id == interview.resume_id))
+            resume_obj = result.scalars().first()
+            if resume_obj and resume_obj.parsed_data:
+                resume_context = resume_obj.parsed_data.get("full_text", "")
+                logger.info("resume_context_loaded", interview_id=str(interview_id), chars=len(resume_context))
+
         question = await question_service.get_next_question(
             db,
             domain=interview.domain or "Software Engineering",
@@ -67,6 +76,7 @@ class InterviewService:
             interview_type=interview.interview_type or "technical",
             target_role=interview.target_role or "",
             asked_question_texts=asked_question_texts,
+            resume_context=resume_context,
         )
 
         if not question:
