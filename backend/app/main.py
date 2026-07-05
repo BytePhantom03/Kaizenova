@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from app.config import settings
-from app.db.session import engine
+from app.db.session import engine, Base
 from app.db.redis import redis_manager
 from app.core.middleware import CorrelationIdMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware
 from app.utils.logger import logger
@@ -13,6 +13,11 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+# ── Import all models so SQLAlchemy metadata is complete before create_all ────
+import app.models.database.user          # noqa: F401
+import app.models.database.interview     # noqa: F401
+import app.models.database.analytics     # noqa: F401
+
 limiter = Limiter(key_func=get_remote_address)
 
 @asynccontextmanager
@@ -20,24 +25,25 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up Kaizenova API...")
     try:
-        # Check DB connection
+        # Auto-create any missing tables (safe: create_all is idempotent)
         async with engine.begin() as conn:
-            await conn.execute(text("SELECT 1"))
-        logger.info("Database connection established.")
-        
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables verified / created.")
+
         # Check Redis connection
         await redis_manager.connect()
-        
+
     except Exception as e:
         logger.critical(f"Startup check failed: {e}")
         # Note: Continuing despite failure for local development resilience
-        
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Kaizenova API...")
     await redis_manager.disconnect()
     await engine.dispose()
+
 
 app = FastAPI(
     title=settings.app.PROJECT_NAME,

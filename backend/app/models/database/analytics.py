@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Numeric, Date, JSON, Uuid as UUID
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, ForeignKey, Text, Numeric, Date, JSON, Uuid as UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 from sqlalchemy.sql import func
@@ -94,3 +94,34 @@ class ReadinessScore(Base):
     confidence_component = Column(Numeric(5, 2), nullable=True)
     consistency_component = Column(Numeric(5, 2), nullable=True)
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SkillTip(Base):
+    """AI-generated improvement tips cached per user per skill."""
+    __tablename__ = "skill_tips"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    skill = Column(String(30), nullable=False)          # "communication" | "confidence" | "grammar"
+    tip_text = Column(Text, nullable=False)
+    tip_order = Column(Integer, default=1)              # 1, 2, 3
+    score_at_generation = Column(Numeric(5, 2), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SkillExercise(Base):
+    """Practice roadmap exercises per user per skill — 3 stages × 3 exercises = 9 total."""
+    __tablename__ = "skill_exercises"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    skill = Column(String(30), nullable=False)          # "communication" | "confidence" | "grammar"
+    stage = Column(Integer, nullable=False)             # 1 (Foundations) | 2 (Intermediate) | 3 (Advanced)
+    order_in_stage = Column(Integer, nullable=False)    # 1, 2, 3
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    difficulty = Column(String(20), default="easy")    # "easy" | "medium" | "hard"
+    is_completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+

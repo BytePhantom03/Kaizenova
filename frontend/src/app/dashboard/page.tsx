@@ -7,8 +7,9 @@ import {
   LayoutDashboard, BrainCircuit, TrendingUp, Settings,
   LogOut, ChevronLeft, ChevronRight as ChevronRightIcon,
   Flame, Target, Sparkles, Clock, BarChart3, Zap, Menu, X,
-  User, Save, CheckCircle2, AlertCircle, Plus, Trash2, BookOpen,
-  Mail, Briefcase, Building2, GraduationCap, Code2, Globe
+  User, Users, Save, Check, CheckCircle2, AlertCircle, Plus, Trash2, BookOpen,
+  Mail, Briefcase, Building2, GraduationCap, Code2, Globe,
+  UploadCloud, FileText
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
@@ -414,173 +415,390 @@ function AnalyticsTab() {
 }
 
 // ─── GROWTH TAB ──────────────────────────────────────────────────────────────
+// ─── Sparkline component ──────────────────────────────────────────────────────
+function Sparkline({ values, color = "#00f0ff" }: { values: number[]; color?: string }) {
+  if (!values || values.length < 2) {
+    return <div className="text-xs text-muted-foreground/50 italic">No trend yet</div>;
+  }
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const w = 80, h = 28, pad = 2;
+  const pts = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${x},${y}`;
+  }).join(" ");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {values.map((v, i) => {
+        const x = pad + (i / (values.length - 1)) * (w - pad * 2);
+        const y = h - pad - ((v - min) / range) * (h - pad * 2);
+        return i === values.length - 1 ? (
+          <circle key={i} cx={x} cy={y} r="3" fill={color} />
+        ) : null;
+      })}
+    </svg>
+  );
+}
+
+// ─── Circular Score Gauge ─────────────────────────────────────────────────────
+function ScoreGauge({ score, size = 72 }: { score: number; size?: number }) {
+  const r = (size - 8) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
+  const color = score >= 75 ? "#22c55e" : score >= 60 ? "#eab308" : "#f43f5e";
+  return (
+    <svg width={size} height={size} className="rotate-[-90deg]">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="7" />
+      <motion.circle
+        cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke={color} strokeWidth="7"
+        strokeLinecap="round"
+        strokeDasharray={`${circ}`}
+        initial={{ strokeDashoffset: circ }}
+        animate={{ strokeDashoffset: circ - dash }}
+        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+      />
+      <text x={size / 2} y={size / 2 + 5}
+        textAnchor="middle" className="rotate-90"
+        style={{ fontSize: 14, fontWeight: 700, fill: color, transform: `rotate(90deg)`, transformOrigin: `${size / 2}px ${size / 2}px` }}
+      >
+        {Math.round(score)}
+      </text>
+    </svg>
+  );
+}
+
+// ─── Skill types ──────────────────────────────────────────────────────────────
+interface SkillData {
+  label: string; avg_score: number; trend: number[]; status: string;
+  tips: { id: string; text: string; order: number }[];
+  stages: Record<number, { id: string; title: string; description: string; difficulty: string; is_completed: boolean; completed_at: string | null; order: number }[]>;
+  total_exercises: number; completed_exercises: number;
+}
+
+// ─── GROWTH TAB ──────────────────────────────────────────────────────────────
 function GrowthTab() {
   const router = useRouter();
-  const [recs, setRecs] = useState<Recommendation[]>([]);
-  const [stats, setStats] = useState<DashboardStats>(defaultStats);
   const [loading, setLoading] = useState(true);
+  const [overview, setOverview] = useState<{ avg_scores: Record<string, number>; skills: Record<string, SkillData>; timeline: any[] } | null>(null);
+  const [generating, setGenerating] = useState<Record<string, boolean>>({});
+  const [openSkill, setOpenSkill] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [statsRes, recsRes] = await Promise.all([
-          api.get("/analytics/dashboard"),
-          api.get("/recommendations/me"),
-        ]);
-        setStats(statsRes.data);
-        setRecs(recsRes.data || []);
-      } catch {
-        setStats(defaultStats);
-        setRecs([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
+  const [apiError, setApiError] = useState(false);
 
-  const totalInterviews = stats.total_interviews;
-  const avgScore = stats.avg_score;
-
-  // Determine growth stage
-  const stage = totalInterviews === 0 ? "beginner" : avgScore >= 75 ? "advanced" : avgScore >= 50 ? "intermediate" : "developing";
-  const stageLabels: Record<string, string> = {
-    beginner: "Getting Started", developing: "Building Skills",
-    intermediate: "Intermediate", advanced: "Advanced"
+  const fetchOverview = async () => {
+    setApiError(false);
+    try {
+      const res = await api.get("/improvement/overview");
+      setOverview(res.data);
+    } catch (err: any) {
+      console.error("Improvement overview error:", err?.response?.data || err.message);
+      setApiError(true);
+      setOverview(null);
+    } finally {
+      setLoading(false);
+    }
   };
-  const stageProgress: Record<string, number> = {
-    beginner: 10, developing: 35, intermediate: 65, advanced: 90
+
+  useEffect(() => { fetchOverview(); }, []);
+
+  const handleGenerate = async (skill: string) => {
+    setGenerating(g => ({ ...g, [skill]: true }));
+    try {
+      await api.post(`/improvement/${skill}/generate`);
+      await fetchOverview();
+    } catch { /* ignore */ }
+    finally { setGenerating(g => ({ ...g, [skill]: false })); }
   };
+
+  const handleToggle = async (exerciseId: string, isCompleted: boolean) => {
+    setToggling(t => ({ ...t, [exerciseId]: true }));
+    try {
+      const endpoint = isCompleted ? `/improvement/exercises/${exerciseId}/uncomplete` : `/improvement/exercises/${exerciseId}/complete`;
+      await api.patch(endpoint);
+      await fetchOverview();
+    } catch { /* ignore */ }
+    finally { setToggling(t => ({ ...t, [exerciseId]: false })); }
+  };
+
+  const skillColors: Record<string, { sparkColor: string; icon: React.ReactNode }> = {
+    communication: { sparkColor: "#00f0ff", icon: <Users className="h-4 w-4 text-primary" /> },
+    confidence: { sparkColor: "#a855f7", icon: <Zap className="h-4 w-4 text-purple-400" /> },
+    grammar: { sparkColor: "#f59e0b", icon: <BookOpen className="h-4 w-4 text-warning" /> },
+  };
+
+  const statusBadge = (s: string) => {
+    if (s === "strong") return <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">Strong</span>;
+    if (s === "improving") return <span className="text-[11px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-medium">Improving</span>;
+    return <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-medium">Needs Work</span>;
+  };
+
+  const diffColor = (d: string) => d === "easy" ? "text-emerald-400" : d === "medium" ? "text-yellow-400" : "text-red-400";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h2 className="text-xl font-bold text-foreground mb-1">Growth Journey</h2>
-        <p className="text-sm text-muted-foreground">Track your skill progression and get personalized improvement plans.</p>
+        <h2 className="text-xl font-bold text-foreground mb-1">Skill Improvement Hub</h2>
+        <p className="text-sm text-muted-foreground">
+          Scores are computed from all your interview sessions. AI generates personalised tips and a practice roadmap for each weak skill.
+        </p>
       </div>
 
-      {/* Level Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-        className="relative rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card/50 to-secondary/5 p-6 overflow-hidden"
-      >
-        <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/10 blur-[60px] pointer-events-none" />
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Current Level</div>
-              <div className="text-2xl font-bold text-foreground">{stageLabels[stage]}</div>
-            </div>
-            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center">
-              <TrendingUp className="h-7 w-7 text-primary" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Progress</span>
-              <span>{stageProgress[stage]}%</span>
-            </div>
-            <div className="w-full h-2.5 rounded-full bg-border overflow-hidden">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-primary to-secondary"
-                initial={{ width: 0 }} animate={{ width: `${stageProgress[stage]}%` }}
-                transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-              />
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-            {[
-              { label: "Sessions", value: totalInterviews },
-              { label: "Avg Score", value: `${avgScore.toFixed(0)}%` },
-              { label: "Streak", value: `${stats.streak_count}d` },
-            ].map(m => (
-              <div key={m.label}>
-                <div className="text-lg font-bold text-foreground">{m.value}</div>
-                <div className="text-xs text-muted-foreground">{m.label}</div>
-              </div>
-            ))}
-          </div>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[0, 1, 2].map(i => <div key={i} className="h-40 rounded-2xl border border-border bg-card/30 animate-pulse" />)}
         </div>
-      </motion.div>
+      ) : apiError ? (
+        <div className="text-center py-16 rounded-2xl border border-dashed border-accent/30 bg-accent/5">
+          <AlertCircle className="h-12 w-12 text-accent/50 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Could not load skill data</h3>
+          <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+            There was an error connecting to the improvement service. The backend may still be starting up.
+          </p>
+          <Button variant="outline" onClick={() => { setLoading(true); fetchOverview(); }} className="gap-2">
+            <Activity className="h-4 w-4" /> Retry
+          </Button>
+        </div>
+      ) : !overview ? (
+        <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-card/20">
+          <BrainCircuit className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">No interview data yet</h3>
+          <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+            Complete at least one interview to see your skill scores and get personalised improvement plans.
+          </p>
+          <Button onClick={() => router.push("/interview/setup")} className="gap-2">
+            <PlayCircle className="h-4 w-4" /> Start an Interview
+          </Button>
+        </div>
+      ) : (
+        <>
+          {/* ── Block 1: Skill Health Cards ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {Object.entries(overview.skills).map(([skill, data]) => {
+              const sc = skillColors[skill] || { sparkColor: "#00f0ff", icon: <Star className="h-4 w-4" /> };
+              return (
+                <motion.div key={skill} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-border bg-card/30 p-5 flex flex-col gap-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">{sc.icon}</div>
+                        <span className="text-sm font-semibold text-foreground">{data.label}</span>
+                      </div>
+                      {statusBadge(data.status)}
+                    </div>
+                    <ScoreGauge score={data.avg_score} />
+                  </div>
 
-      {/* AI Recommendations */}
-      <div className="rounded-2xl border border-border bg-card/30 p-6">
-        <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" /> AI Study Recommendations
-        </h3>
-        {loading ? (
-          <div className="space-y-3">
-            {[0, 1, 2].map(i => <div key={i} className="h-14 rounded-xl bg-muted animate-pulse" />)}
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1.5">Last 5 sessions</div>
+                    <Sparkline values={data.trend} color={sc.sparkColor} />
+                  </div>
+
+                  {data.status === "weak" && (
+                    <button
+                      onClick={() => setOpenSkill(openSkill === skill ? null : skill)}
+                      className="w-full text-xs font-medium text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 rounded-lg py-2 transition-colors"
+                    >
+                      {openSkill === skill ? "▲ Hide Plan" : "▼ View Tips & Roadmap"}
+                    </button>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
-        ) : recs.length === 0 ? (
-          <div className="text-center py-8">
-            <BookOpen className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">
-              {totalInterviews === 0
-                ? "Complete an interview to get personalized study recommendations."
-                : "No recommendations yet. Keep practising!"}
-            </p>
-            <Button onClick={() => router.push("/interview/setup")} className="mt-4 gap-2" size="sm">
-              <PlayCircle className="h-4 w-4" /> Start Interview
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {recs.map((rec, i) => (
-              <motion.div
-                key={rec.id}
-                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-start gap-4 p-4 rounded-xl border border-border bg-surface hover:bg-surface-elevated transition-colors"
-              >
-                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Target className="h-4 w-4 text-primary" />
+
+          {/* ── Block 2 + 3: Tips & Roadmap (expands per skill) ── */}
+          {Object.entries(overview.skills).map(([skill, data]) => {
+            if (data.status !== "weak" && openSkill !== skill) return null;
+            if (openSkill !== skill && data.status === "weak") return null;
+            const isOpen = openSkill === skill;
+            if (!isOpen) return null;
+
+            const sc = skillColors[skill] || { sparkColor: "#00f0ff", icon: <Star className="h-4 w-4" /> };
+            const stage1Done = data.stages[1]?.every(e => e.is_completed) ?? false;
+            const stage2Done = data.stages[2]?.every(e => e.is_completed) ?? false;
+
+            return (
+              <motion.div key={`plan-${skill}`}
+                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-border bg-card/30 overflow-hidden">
+
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">{sc.icon}</div>
+                    <span className="font-semibold text-foreground">{data.label} Improvement Plan</span>
+                    <span className="text-xs text-muted-foreground ml-2">({data.completed_exercises}/{data.total_exercises} exercises done)</span>
+                  </div>
+                  <button
+                    onClick={() => handleGenerate(skill)}
+                    disabled={generating[skill]}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {generating[skill]
+                      ? <><div className="h-3 w-3 rounded-full border border-primary/40 border-t-primary animate-spin" /> Generating...</>
+                      : <><Sparkles className="h-3 w-3" /> {data.total_exercises > 0 ? "Refresh" : "Generate"} AI Plan</>
+                    }
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-foreground mb-0.5">{rec.weak_area}</div>
-                  {rec.action_plan?.[0] && (
-                    <div className="text-xs text-muted-foreground leading-relaxed">
-                      {rec.action_plan[0].description || rec.action_plan[0].action || "Review this topic."}
+
+                <div className="p-6 space-y-6">
+                  {/* AI Tips */}
+                  {data.tips.length > 0 ? (
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-primary" /> AI Improvement Tips
+                      </h4>
+                      <div className="space-y-2">
+                        {data.tips.map((tip, i) => (
+                          <div key={tip.id} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-surface/50">
+                            <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5">{i + 1}</div>
+                            <p className="text-sm text-muted-foreground leading-relaxed">{tip.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : data.total_exercises === 0 && !generating[skill] ? (
+                    <div className="text-center py-6 rounded-xl border border-dashed border-border">
+                      <Sparkles className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground mb-3">No AI tips yet. Click "Generate AI Plan" to get started.</p>
+                    </div>
+                  ) : null}
+
+                  {/* Exercise Roadmap */}
+                  {data.total_exercises > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                        <Target className="h-4 w-4 text-secondary" /> Practice Roadmap
+                      </h4>
+
+                      {/* Overall progress bar */}
+                      <div className="mb-4">
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                          <span>Overall Progress</span>
+                          <span>{data.completed_exercises}/{data.total_exercises}</span>
+                        </div>
+                        <div className="h-2 w-full bg-border/50 rounded-full overflow-hidden">
+                          <motion.div className="h-full rounded-full bg-gradient-to-r from-primary to-secondary"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${data.total_exercises > 0 ? (data.completed_exercises / data.total_exercises) * 100 : 0}%` }}
+                            transition={{ duration: 0.8 }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        {[1, 2, 3].map(stageNum => {
+                          const stageExercises = data.stages[stageNum] || [];
+                          const stageDone = stageExercises.filter(e => e.is_completed).length;
+                          const stageLocked = (stageNum === 2 && !stage1Done) || (stageNum === 3 && !stage2Done);
+                          const stageLabels: Record<number, string> = { 1: "Foundations", 2: "Intermediate", 3: "Advanced" };
+
+                          return (
+                            <div key={stageNum} className={`rounded-xl border overflow-hidden ${stageLocked ? "border-border/30 opacity-60" : "border-border"}`}>
+                              <div className={`px-4 py-3 flex items-center justify-between ${stageLocked ? "bg-muted/20" : "bg-surface/50"}`}>
+                                <div className="flex items-center gap-2">
+                                  {stageLocked
+                                    ? <div className="h-5 w-5 rounded-full bg-muted/50 flex items-center justify-center"><span className="text-[10px]">🔒</span></div>
+                                    : <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{stageNum}</div>
+                                  }
+                                  <span className="text-sm font-medium text-foreground">
+                                    Stage {stageNum}: {stageLabels[stageNum]}
+                                  </span>
+                                  {!stageLocked && stageDone === stageExercises.length && stageExercises.length > 0 && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">✅ Complete</span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted-foreground">{stageDone}/{stageExercises.length}</span>
+                              </div>
+
+                              {!stageLocked && stageExercises.length > 0 && (
+                                <div className="divide-y divide-border/30">
+                                  {stageExercises.sort((a, b) => a.order - b.order).map(ex => (
+                                    <div key={ex.id} className="px-4 py-3 flex items-start gap-3 hover:bg-surface/30 transition-colors">
+                                      <button
+                                        onClick={() => handleToggle(ex.id, ex.is_completed)}
+                                        disabled={toggling[ex.id]}
+                                        className={`h-5 w-5 rounded-md border flex-shrink-0 mt-0.5 flex items-center justify-center transition-all ${
+                                          ex.is_completed ? "bg-emerald-500 border-emerald-500 text-white" : "border-border hover:border-primary"
+                                        }`}
+                                      >
+                                        {toggling[ex.id]
+                                          ? <div className="h-3 w-3 rounded-full border border-white/30 border-t-white animate-spin" />
+                                          : ex.is_completed ? <Check className="h-3 w-3" /> : null
+                                        }
+                                      </button>
+                                      <div className="flex-1 min-w-0">
+                                        <div className={`text-sm font-medium ${ex.is_completed ? "text-muted-foreground line-through" : "text-foreground"}`}>
+                                          {ex.title}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{ex.description}</div>
+                                        <div className="flex items-center gap-3 mt-1">
+                                          <span className={`text-[11px] font-medium ${diffColor(ex.difficulty)}`}>{ex.difficulty}</span>
+                                          {ex.completed_at && (
+                                            <span className="text-[11px] text-muted-foreground/60">
+                                              ✓ {new Date(ex.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {stageLocked && (
+                                <div className="px-4 py-3 text-xs text-muted-foreground/60 italic">
+                                  Complete Stage {stageNum - 1} first to unlock this stage.
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
-                <div className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${rec.status === 'completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
-                  {rec.status}
-                </div>
               </motion.div>
-            ))}
-          </div>
-        )}
-      </div>
+            );
+          })}
 
-      {/* Next steps */}
-      <div className="rounded-2xl border border-border bg-card/30 p-6">
-        <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Zap className="h-4 w-4 text-warning" /> Next Steps
-        </h3>
-        <div className="space-y-3">
-          {[
-            { step: "Practice daily", desc: "Build a streak by completing at least one session per day.", done: stats.streak_count > 0 },
-            { step: "Aim for 70%+ avg score", desc: "You're currently averaging " + avgScore.toFixed(0) + "%. Keep pushing!", done: avgScore >= 70 },
-            { step: "Complete 5 interviews", desc: "Each interview unlocks deeper analytics and smarter recommendations.", done: totalInterviews >= 5 },
-          ].map((s, i) => (
-            <div key={i} className={`flex items-center gap-4 p-4 rounded-xl border ${s.done ? 'border-success/20 bg-success/5' : 'border-border bg-surface'}`}>
-              <div className={`h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0 ${s.done ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'}`}>
-                {s.done ? <CheckCircle2 className="h-4 w-4" /> : <span className="text-xs font-bold">{i + 1}</span>}
+          {/* ── Block 4: Progress Timeline ── */}
+          {overview.timeline.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-border bg-card/30 p-6">
+              <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-primary" /> Completion Timeline
+              </h3>
+              <div className="space-y-2">
+                {overview.timeline.map((item, i) => (
+                  <motion.div key={item.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
+                    className="flex items-center gap-3 text-sm">
+                    <div className="h-2 w-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                    <span className="text-muted-foreground">
+                      Completed <span className="text-foreground font-medium">"{item.title}"</span>
+                      <span className="text-muted-foreground/60 ml-1.5">
+                        · {item.completed_at ? new Date(item.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
+                      </span>
+                    </span>
+                  </motion.div>
+                ))}
               </div>
-              <div>
-                <div className={`text-sm font-semibold ${s.done ? 'text-success' : 'text-foreground'}`}>{s.step}</div>
-                <div className="text-xs text-muted-foreground">{s.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+            </motion.div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
 // ─── SETTINGS TAB ────────────────────────────────────────────────────────────
+
 function SettingsTab() {
   const { user, logout } = useAuthStore();
   const router = useRouter();
@@ -743,6 +961,177 @@ function SettingsTab() {
   );
 }
 
+// ─── Resume Interview Card ────────────────────────────────────────────────────
+function ResumeInterviewCard({ router }: { router: any }) {
+  const [status, setStatus] = React.useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [resumeData, setResumeData] = React.useState<{
+    resume_id: string; file_name: string; detected_role: string;
+    experience_years: number; key_skills: string[]; difficulty_setting: string;
+  } | null>(null);
+  const [errorMsg, setErrorMsg] = React.useState("");
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFile = async (file: File) => {
+    const lower = file.name.toLowerCase();
+    if (!lower.endsWith(".pdf") && !lower.endsWith(".docx") && !lower.endsWith(".txt")) {
+      setErrorMsg("Please upload a PDF, DOCX, or TXT file.");
+      setStatus("error");
+      return;
+    }
+    setStatus("uploading");
+    setErrorMsg("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.post("/resumes/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setResumeData(res.data);
+      setStatus("done");
+    } catch (e: any) {
+      setErrorMsg(e.response?.data?.detail || "Upload failed. Please try again.");
+      setStatus("error");
+    }
+  };
+
+  const handleStartInterview = () => {
+    if (!resumeData) return;
+    const params = new URLSearchParams({
+      resume_id: resumeData.resume_id,
+      difficulty: resumeData.difficulty_setting,
+      ...(resumeData.detected_role ? { role: resumeData.detected_role } : {}),
+    });
+    router.push(`/interview/setup?${params.toString()}`);
+  };
+
+  const difficultyColor: Record<string, string> = {
+    beginner: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30",
+    intermediate: "text-yellow-400 bg-yellow-400/10 border-yellow-400/30",
+    advanced: "text-accent bg-accent/10 border-accent/30",
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+      className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card/50 to-secondary/5 p-6 overflow-hidden relative"
+    >
+      {/* Ambient glow */}
+      <div className="absolute top-0 right-0 h-28 w-28 rounded-full bg-primary/10 blur-[50px] pointer-events-none" />
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
+            <FileText className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Resume Interview</h3>
+            <p className="text-xs text-muted-foreground">AI tailors questions from your resume</p>
+          </div>
+        </div>
+
+        {status === "idle" || status === "error" ? (
+          <>
+            <div
+              className={`rounded-xl border-2 border-dashed cursor-pointer transition-all duration-200 ${
+                isDragging ? "border-primary bg-primary/10 scale-[1.01]" :
+                status === "error" ? "border-accent/40 bg-accent/5" :
+                "border-border/60 bg-card/20 hover:border-primary/40 hover:bg-primary/5"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => { e.preventDefault(); setIsDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+              onClick={() => inputRef.current?.click()}
+            >
+              <input ref={inputRef} type="file" accept=".pdf,.docx,.txt" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+              <div className="flex flex-col items-center gap-2 py-6 px-4 text-center">
+                <UploadCloud className={`h-8 w-8 ${status === "error" ? "text-accent" : "text-primary/60"}`} />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {status === "error" ? errorMsg : "Drop your resume here"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">PDF, DOCX or TXT • Click or drag & drop</p>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : status === "uploading" ? (
+          <div className="rounded-xl border border-border bg-card/30 p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">Analysing resume with AI...</p>
+                <p className="text-xs text-muted-foreground">Detecting experience level & skills</p>
+              </div>
+            </div>
+            <div className="h-1.5 w-full bg-border/50 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-primary to-secondary"
+                initial={{ width: "0%" }}
+                animate={{ width: "80%" }}
+                transition={{ duration: 2.5, ease: "easeInOut" }}
+              />
+            </div>
+          </div>
+        ) : (
+          /* Done state */
+          <div className="space-y-3">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-emerald-400">Resume analysed!</p>
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">{resumeData?.file_name}</p>
+                </div>
+                <button
+                  onClick={() => { setStatus("idle"); setResumeData(null); }}
+                  className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded hover:bg-muted/50 flex-shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {resumeData && (
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  {resumeData.detected_role && (
+                    <div className="col-span-2 text-muted-foreground">
+                      Role detected: <span className="text-foreground font-medium">{resumeData.detected_role}</span>
+                    </div>
+                  )}
+                  <div className="text-muted-foreground">
+                    Experience: <span className="text-foreground font-medium">{resumeData.experience_years}+ yrs</span>
+                  </div>
+                  <div className="text-muted-foreground">
+                    Difficulty: <span className={`font-medium px-1.5 py-0.5 rounded-md border text-[11px] ${difficultyColor[resumeData.difficulty_setting] || ""}`}>
+                      {resumeData.difficulty_setting}
+                    </span>
+                  </div>
+                  {resumeData.key_skills.length > 0 && (
+                    <div className="col-span-2">
+                      <p className="text-muted-foreground mb-1">Top skills:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {resumeData.key_skills.slice(0, 5).map((s, i) => (
+                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <Button onClick={handleStartInterview} className="w-full gap-2 shadow-glow-primary">
+              <BrainCircuit className="h-4 w-4" /> Start Resume Interview
+            </Button>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 function DashboardTab({ stats, loading, router, firstName, getGreeting, onTabChange }: {
   stats: DashboardStats; loading: boolean; router: any; firstName: string; getGreeting: () => string; onTabChange?: (tab: Tab) => void;
 }) {
@@ -823,6 +1212,7 @@ function DashboardTab({ stats, loading, router, firstName, getGreeting, onTabCha
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+        {/* Quick Actions */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="lg:col-span-1">
           <div className="rounded-2xl border border-border bg-card/30 p-6 h-full">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Quick Actions</h3>
@@ -864,7 +1254,8 @@ function DashboardTab({ stats, loading, router, firstName, getGreeting, onTabCha
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="lg:col-span-2">
+        {/* AI Coach */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="lg:col-span-1">
           <div className="relative rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card/50 to-secondary/5 p-6 h-full overflow-hidden">
             <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-primary/10 blur-[60px] pointer-events-none" />
             <div className="relative z-10">
@@ -895,6 +1286,11 @@ function DashboardTab({ stats, loading, router, firstName, getGreeting, onTabCha
             </div>
           </div>
         </motion.div>
+
+        {/* Resume Interview Card */}
+        <div className="lg:col-span-1">
+          <ResumeInterviewCard router={router} />
+        </div>
       </div>
 
       {stats.recent_activity.length > 0 ? (

@@ -8,6 +8,7 @@ from .analytics import router as analytics_router
 from .streaks import router as streaks_router
 from .recommendations import router as recommendations_router
 from .ai_audio import router as ai_audio_router
+from .improvement import router as improvement_router
 
 api_router = APIRouter()
 
@@ -20,3 +21,5 @@ api_router.include_router(analytics_router, prefix="/analytics", tags=["analytic
 api_router.include_router(streaks_router, prefix="/streaks", tags=["streaks"])
 api_router.include_router(recommendations_router, prefix="/recommendations", tags=["recommendations"])
 api_router.include_router(ai_audio_router, prefix="/ai", tags=["AI Audio"])
+api_router.include_router(improvement_router, prefix="/improvement", tags=["improvement"])
+

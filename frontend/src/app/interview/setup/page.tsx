@@ -93,15 +93,25 @@ function InterviewSetupInner() {
     if (!isAuthenticated) router.push("/auth/login");
   }, [isAuthenticated, _hasHydrated, router]);
 
-  // Pre-fill from recommendation query params
+  // Pre-fill from recommendation OR resume query params
   useEffect(() => {
     const recommended = searchParams.get("recommended");
     const domain = searchParams.get("domain");
     const type = searchParams.get("type");
     const difficulty = searchParams.get("difficulty");
     const role = searchParams.get("role");
-    if (recommended === "true") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+    const resumeId = searchParams.get("resume_id");
+
+    if (resumeId) {
+      // Coming from the dashboard resume upload — skip to step 3 with pre-filled data
+      setForm(f => ({
+        ...f,
+        resume_id: resumeId,
+        ...(difficulty ? { difficulty_setting: difficulty } : {}),
+        ...(role ? { target_role: role } : {}),
+      }));
+      setStep(3);
+    } else if (recommended === "true") {
       setForm(f => ({
         ...f,
         domain: domain || f.domain,
@@ -269,6 +279,21 @@ function InterviewSetupInner() {
               <div className="text-sm font-semibold text-primary">AI-Recommended Session</div>
               <div className="text-xs text-muted-foreground">
                 This session has been pre-configured based on your weak areas. You can adjust settings below before starting.
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {searchParams.get("resume_id") && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 flex items-center gap-3"
+          >
+            <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+            <div>
+              <div className="text-sm font-semibold text-emerald-400">Resume Interview Ready</div>
+              <div className="text-xs text-muted-foreground">
+                Your resume is attached. The AI will ask questions tailored to your actual projects and tech stack.
               </div>
             </div>
           </motion.div>
