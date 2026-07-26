@@ -164,6 +164,7 @@ function Sidebar({ collapsed, onToggle, activeTab, onTabChange }: {
   const navItems: { icon: React.ReactNode; label: string; tab?: Tab; href?: string }[] = [
     { icon: <LayoutDashboard className="h-5 w-5" />, label: "Dashboard", tab: "dashboard" },
     { icon: <BrainCircuit className="h-5 w-5" />, label: "Interviews", href: "/interview/setup" },
+    { icon: <Sparkles className="h-5 w-5" />, label: "Skills", href: "/skills" },
     { icon: <BarChart3 className="h-5 w-5" />, label: "Analytics", tab: "analytics" },
     { icon: <TrendingUp className="h-5 w-5" />, label: "Growth", tab: "growth" },
     { icon: <Settings className="h-5 w-5" />, label: "Settings", tab: "settings" },
@@ -1358,6 +1359,17 @@ function DashboardTab({ stats, loading, router, firstName, getGreeting, onTabCha
                 <div className="text-left">
                   <div className="text-sm font-medium text-foreground">Quick Interview</div>
                   <div className="text-xs text-muted-foreground">Start a practice session</div>
+                </div>
+                <ChevronRightIcon className="h-4 w-4 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
+              </button>
+              <button onClick={() => router.push("/skills")}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-surface hover:bg-surface-elevated hover:border-primary/30 transition-all group">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                </div>
+                <div className="text-left">
+                  <div className="text-sm font-medium text-foreground">Skills Practice</div>
+                  <div className="text-xs text-muted-foreground">Speaking, IELTS, Grammar & more</div>
                 </div>
                 <ChevronRightIcon className="h-4 w-4 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
               </button>

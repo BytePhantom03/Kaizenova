@@ -17,6 +17,7 @@ from slowapi.errors import RateLimitExceeded
 import app.models.database.user          # noqa: F401
 import app.models.database.interview     # noqa: F401
 import app.models.database.analytics     # noqa: F401
+import app.models.database.skills_practice  # noqa: F401
 
 limiter = Limiter(key_func=get_remote_address)
 
