@@ -10,6 +10,8 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/axios";
+import AIAvatar from "@/components/interview/AIAvatar";
+
 
 interface Question {
   id: string;
@@ -614,115 +616,140 @@ export default function InterviewSession({ params }: { params: Promise<{ id: str
           {/* Answering */}
           {phase === "answering" && question && (
             <motion.div key="answering" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
+              className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start"
             >
-              {/* Tags and Status */}
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  {(() => {
-                    const dl = difficultyLabel(question.difficulty);
-                    return (
-                      <span className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${dl.bg} ${dl.color}`}>
-                        {dl.text} · {question.difficulty}/10
-                      </span>
-                    );
-                  })()}
-                  <span className="text-xs px-2.5 py-1 rounded-lg border border-border bg-surface text-muted-foreground capitalize">
-                    {question.question_type}
-                  </span>
+              {/* ── Avatar panel ── */}
+              <div className="w-full lg:w-auto flex flex-col items-center lg:sticky lg:top-24">
+                {/* Mobile: compact horizontal */}
+                <div className="block lg:hidden">
+                  <AIAvatar isSpeaking={isPlayingTTS} isListening={isRecording} isThinking={false} size={110} />
                 </div>
-                
-                {/* Audio Status Pill */}
-                <AnimatePresence>
-                  {isPlayingTTS && (
-                    <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-medium"
-                    >
-                      <Volume2 className="h-3.5 w-3.5" /> Interviewer Speaking
-                    </motion.div>
-                  )}
-                  {isRecording && (
-                    <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-danger/10 border border-danger/30 text-danger text-xs font-medium"
-                    >
-                      {/* Waveform visualizer */}
-                      <div className="flex items-end gap-0.5 h-3">
-                        {[...Array(5)].map((_, i) => (
-                          <div key={i} className="w-0.5 bg-danger rounded-full waveform-bar" style={{ minHeight: '3px' }} />
-                        ))}
-                      </div>
-                      Listening (Auto-submits after 5s silence)
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Question card */}
-              <div className="relative rounded-2xl border border-border bg-card/30 backdrop-blur-sm overflow-hidden">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary via-secondary to-primary" />
-                <div className="p-6 lg:p-8 pl-7 lg:pl-9">
-                  <p className="text-lg font-medium text-foreground leading-relaxed">{question.question_text}</p>
+                {/* Desktop: full size */}
+                <div className="hidden lg:block">
+                  <AIAvatar isSpeaking={isPlayingTTS} isListening={isRecording} isThinking={false} size={200} />
                 </div>
               </div>
 
-              {/* Answer area */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-muted-foreground">
-                    {isRecording ? (
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-danger animate-pulse inline-block" />
-                        Listening... (transcription appears here)
-                      </span>
-                    ) : "Your Answer"}
-                  </label>
-                  <span className="text-xs text-muted-foreground tabular-nums">{answer.length} chars</span>
-                </div>
-                <textarea
-                  value={answer}
-                  onChange={(e) => { if (!isRecording) setAnswer(e.target.value); }}
-                  placeholder={isRecording ? "Speak now — your words will appear here in real time..." : "Speak your answer when prompted..."}
-                  rows={8}
-                  disabled={isPlayingTTS}
-                  style={{ cursor: isRecording ? "not-allowed" : "auto" }}
-                  className="w-full rounded-2xl border border-border bg-surface px-5 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 resize-none leading-relaxed focus:shadow-[0_0_0_1px_rgba(0,240,255,0.3),0_0_12px_rgba(0,240,255,0.1)] disabled:opacity-50"
-                />
-              </div>
+              {/* ── Question + Answer panel ── */}
+              <div className="flex-1 min-w-0 space-y-6">
+                {/* Tags and Status */}
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const dl = difficultyLabel(question.difficulty);
+                      return (
+                        <span className={`text-xs px-2.5 py-1 rounded-lg border font-medium ${dl.bg} ${dl.color}`}>
+                          {dl.text} · {question.difficulty}/10
+                        </span>
+                      );
+                    })()}
+                    <span className="text-xs px-2.5 py-1 rounded-lg border border-border bg-surface text-muted-foreground capitalize">
+                      {question.question_type}
+                    </span>
+                  </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setAnswer("");
-                    manualSubmitText();
-                  }}
-                  disabled={isPlayingTTS}
-                  className="gap-2 text-muted-foreground hover:text-foreground"
-                >
-                  <SkipForward className="h-4 w-4" /> Skip
-                </Button>
-                <Button
-                  onClick={() => manualSubmitText()}
-                  disabled={isPlayingTTS || (!isRecording && !answer.trim())}
-                  className="flex-1 gap-2"
-                >
-                  {isRecording ? "Stop Listening & Submit" : "Submit Answer"} <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              {/* Keyboard shortcut hint */}
-              <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground/60">
-                <span>Press</span>
-                <kbd className="kbd">Enter</kbd>
-                <span>to submit</span>
-                <span className="mx-1">·</span>
-                <kbd className="kbd">Esc</kbd>
-                <span>to skip</span>
+                  {/* Audio Status Pill */}
+                  <AnimatePresence>
+                    {isPlayingTTS && (
+                      <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-medium"
+                      >
+                        <Volume2 className="h-3.5 w-3.5" /> Interviewer Speaking
+                      </motion.div>
+                    )}
+                    {isRecording && (
+                      <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-danger/10 border border-danger/30 text-danger text-xs font-medium"
+                      >
+                        {/* Waveform visualizer */}
+                        <div className="flex items-end gap-0.5 h-3">
+                          {[...Array(5)].map((_, i) => (
+                            <div key={i} className="w-0.5 bg-danger rounded-full waveform-bar" style={{ minHeight: '3px' }} />
+                          ))}
+                        </div>
+                        Listening (Auto-submits after 5s silence)
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Question card */}
+                <div className="relative rounded-2xl border border-border bg-card/30 backdrop-blur-sm overflow-hidden">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary via-secondary to-primary" />
+                  <div className="p-6 lg:p-8 pl-7 lg:pl-9">
+                    <p className="text-lg font-medium text-foreground leading-relaxed">{question.question_text}</p>
+                  </div>
+                </div>
+
+                {/* Answer area */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-muted-foreground">
+                      {isRecording ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-danger animate-pulse inline-block" />
+                          Listening... (transcription appears here)
+                        </span>
+                      ) : "Your Answer"}
+                    </label>
+                    <span className="text-xs text-muted-foreground tabular-nums">{answer.length} chars</span>
+                  </div>
+                  <textarea
+                    value={answer}
+                    onChange={(e) => { if (!isRecording) setAnswer(e.target.value); }}
+                    placeholder={isRecording ? "Speak now — your words will appear here in real time..." : "Speak your answer when prompted..."}
+                    rows={8}
+                    disabled={isPlayingTTS}
+                    style={{ cursor: isRecording ? "not-allowed" : "auto" }}
+                    className="w-full rounded-2xl border border-border bg-surface px-5 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200 resize-none leading-relaxed focus:shadow-[0_0_0_1px_rgba(0,240,255,0.3),0_0_12px_rgba(0,240,255,0.1)] disabled:opacity-50"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setAnswer("");
+                      manualSubmitText();
+                    }}
+                    disabled={isPlayingTTS}
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <SkipForward className="h-4 w-4" /> Skip
+                  </Button>
+                  <Button
+                    onClick={() => manualSubmitText()}
+                    disabled={isPlayingTTS || (!isRecording && !answer.trim())}
+                    className="flex-1 gap-2"
+                  >
+                    {isRecording ? "Stop Listening & Submit" : "Submit Answer"} <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                {/* Keyboard shortcut hint */}
+                <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground/60">
+                  <span>Press</span>
+                  <kbd className="kbd">Enter</kbd>
+                  <span>to submit</span>
+                  <span className="mx-1">·</span>
+                  <kbd className="kbd">Esc</kbd>
+                  <span>to skip</span>
+                </div>
               </div>
             </motion.div>
           )}
 
+
           {/* Evaluating */}
-          {phase === "evaluating" && <EvaluatingPhase isTranscribing={isTranscribing} />}
+          {phase === "evaluating" && (
+            <motion.div key="evaluating" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="flex flex-col lg:flex-row items-center justify-center gap-10 h-[60vh]"
+            >
+              {/* Avatar — thinking state */}
+              <AIAvatar isSpeaking={false} isListening={false} isThinking={true} size={180} />
+              <EvaluatingPhase isTranscribing={isTranscribing} />
+            </motion.div>
+          )}
+
 
 
 
