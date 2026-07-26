@@ -489,6 +489,8 @@ function GrowthTab() {
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
 
   const [apiError, setApiError] = useState(false);
+  const [resources, setResources] = useState<{ groups: any[]; total_resources: number; source: string } | null>(null);
+  const [resLoading, setResLoading] = useState(true);
 
   const fetchOverview = async () => {
     setApiError(false);
@@ -505,6 +507,20 @@ function GrowthTab() {
   };
 
   useEffect(() => { fetchOverview(); }, []);
+
+  useEffect(() => {
+    const fetchResources = async () => {
+      try {
+        const res = await api.get("/improvement/resources");
+        setResources(res.data);
+      } catch {
+        setResources(null);
+      } finally {
+        setResLoading(false);
+      }
+    };
+    fetchResources();
+  }, []);
 
   const handleGenerate = async (skill: string) => {
     setGenerating(g => ({ ...g, [skill]: true }));
@@ -791,6 +807,123 @@ function GrowthTab() {
               </div>
             </motion.div>
           )}
+          {/* ── Block 5: Free Learning Resources ── */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+            className="rounded-2xl border border-border bg-card/30 overflow-hidden"
+          >
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-primary" /> Free Learning Resources
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {resources?.source === "personalized"
+                    ? "Curated based on your weak areas from past interviews"
+                    : "Top free resources to get you interview-ready"}
+                </p>
+              </div>
+              {resources && (
+                <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary font-medium">
+                  {resources.total_resources} resources
+                </span>
+              )}
+            </div>
+
+            <div className="p-6">
+              {resLoading ? (
+                <div className="space-y-6">
+                  {[0, 1].map(i => (
+                    <div key={i} className="space-y-3">
+                      <div className="h-4 w-32 rounded-md bg-border/50 animate-pulse" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {[0, 1, 2].map(j => <div key={j} className="h-36 rounded-xl bg-border/30 animate-pulse" />)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : !resources || resources.groups.length === 0 ? (
+                <div className="text-center py-8">
+                  <BookOpen className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">No resources loaded yet. Complete an interview to get personalised recommendations.</p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {resources.groups.map((group: any) => (
+                    <div key={group.topic}>
+                      {/* Group header */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                        <h4 className="text-sm font-semibold text-foreground capitalize">{group.label}</h4>
+                        <div className="flex-1 h-px bg-border/40" />
+                        <span className="text-[11px] text-muted-foreground">{group.resources.length} resources</span>
+                      </div>
+
+                      {/* Resource cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {group.resources.map((res: any, idx: number) => (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                            className="group relative rounded-xl border border-border bg-surface/50 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 overflow-hidden flex flex-col"
+                          >
+                            {/* Subtle top gradient */}
+                            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/0 via-primary/40 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                            <div className="p-4 flex-1 flex flex-col gap-3">
+                              {/* Icon + title */}
+                              <div className="flex items-start gap-3">
+                                <div className="text-2xl flex-shrink-0 mt-0.5">{res.icon}</div>
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground leading-snug group-hover:text-primary transition-colors line-clamp-2">
+                                    {res.title}
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">{res.platform}</p>
+                                </div>
+                              </div>
+
+                              {/* Description */}
+                              <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 flex-1">
+                                {res.description}
+                              </p>
+
+                              {/* Meta badges */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium border ${
+                                  res.level === 'Beginner' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  : res.level === 'Intermediate' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                                  : res.level === 'All Levels' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                }`}>{res.level}</span>
+                                {res.duration && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-border/60 text-muted-foreground border border-border">
+                                    ⏱ {res.duration}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* CTA Button */}
+                            <div className="px-4 pb-4">
+                              <a
+                                href={res.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1.5 w-full text-xs font-semibold py-2 px-3 rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary hover:text-background transition-all duration-200"
+                              >
+                                Start Learning <ArrowRight className="h-3 w-3" />
+                              </a>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
         </>
       )}
     </div>

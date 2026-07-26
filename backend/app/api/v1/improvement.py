@@ -9,8 +9,25 @@ from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models.database.user import User
 from app.services.improvement_service import improvement_service
+from app.services.learning_resource_service import learning_resource_service
 
 router = APIRouter()
+
+
+@router.get("/resources")
+async def get_learning_resources(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns personalised free learning resources based on the user's
+    weak areas across all interviews. Grouped by topic/skill category.
+    """
+    try:
+        return await learning_resource_service.get_resources(db, current_user.id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.get("/overview")
