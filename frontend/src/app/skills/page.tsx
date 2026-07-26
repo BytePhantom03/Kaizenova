@@ -7,8 +7,9 @@ import {
   Mic, MessageSquare, Trophy, BookOpen, PenLine,
   Handshake, Presentation, Mail, BookMarked, Zap,
   Crown, Users2, ChevronRight, ArrowLeft,
-  TrendingUp, Star, Clock, Sparkles, Target
+  TrendingUp, Star, Clock, Sparkles, Target, GraduationCap
 } from "lucide-react";
+import LearningHub from "@/components/skills/LearningHub";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface TrainerInfo {
@@ -104,11 +105,12 @@ function CategoryHeader({ category }: { category: string }) {
 
 // ── Trainer card ──────────────────────────────────────────────────────────
 function TrainerCard({
-  trainer, progress, index,
+  trainer, progress, index, onLearn,
 }: {
   trainer: TrainerInfo;
   progress?: ProgressEntry;
   index: number;
+  onLearn: (id: string) => void;
 }) {
   const router = useRouter();
   const route = ROUTE_MAP[trainer.id];
@@ -176,12 +178,22 @@ function TrainerCard({
         )}
       </div>
 
-      {/* CTA */}
-      <div className="px-5 pb-4">
-        <div className="flex items-center justify-center gap-1.5 w-full text-xs font-semibold py-2 px-3 rounded-xl border border-primary/30 bg-primary/5 text-primary group-hover:bg-primary group-hover:text-background transition-all duration-200">
-          {progress && progress.sessions_count > 0 ? "Continue Practice" : "Start Practice"}
+      {/* CTA — two buttons */}
+      <div className="px-5 pb-4 flex gap-2">
+        <button
+          onClick={e => { e.stopPropagation(); onLearn(trainer.id); }}
+          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 px-2 rounded-xl border border-border/60 bg-surface/50 text-muted-foreground hover:text-foreground hover:border-border transition-all duration-200"
+        >
+          <GraduationCap className="h-3.5 w-3.5" />
+          How to Learn
+        </button>
+        <button
+          onClick={() => route && router.push(route)}
+          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 px-2 rounded-xl border border-primary/30 bg-primary/5 text-primary hover:bg-primary hover:text-background transition-all duration-200"
+        >
+          {progress && progress.sessions_count > 0 ? "Continue" : "Start Practice"}
           <ChevronRight className="h-3.5 w-3.5" />
-        </div>
+        </button>
       </div>
     </motion.div>
   );
@@ -221,6 +233,7 @@ export default function SkillsHubPage() {
   const [trainers, setTrainers] = useState<TrainerInfo[]>([]);
   const [progress, setProgress] = useState<ProgressEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openLearning, setOpenLearning] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -251,6 +264,15 @@ export default function SkillsHubPage() {
 
   return (
     <div className="min-h-screen bg-background">
+
+      {/* Learning hub modal — rendered at root level so it overlays everything */}
+      {openLearning && (
+        <LearningHub
+          trainerType={openLearning}
+          onClose={() => setOpenLearning(null)}
+        />
+      )}
+
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 
         {/* Header */}
@@ -298,6 +320,7 @@ export default function SkillsHubPage() {
                       trainer={t}
                       progress={progressMap[t.id]}
                       index={i}
+                      onLearn={setOpenLearning}
                     />
                   ))}
                 </div>
