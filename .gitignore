@@ -12,3 +12,8 @@ venv/
 
 coverage/
 .pytest_cache/
+
+# Markdown files
+*.md
+!README.md
+!*/README.md
