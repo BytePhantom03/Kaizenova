@@ -1,7 +1,7 @@
 """
 Skills Evaluator — AI evaluation engine for all personal skill trainers.
 
-Reuses existing llm_engine, grammar_engine, and confidence_engine.
+Reuses existing llm_engine and grammar_engine.
 Each trainer has a dedicated evaluation method with a structured prompt
 that always returns a validated JSON payload.
 
@@ -9,7 +9,7 @@ Design principles:
 - Never raises — always returns a partial result on failure
 - All prompts enforce JSON output via the llm_engine.generate_json()
 - Grammar scoring reuses the existing grammar_engine (no duplication)
-- Confidence scoring reuses the existing confidence_engine
+- Confidence estimated via text-based heuristic (_text_confidence_score)
 """
 import json
 import re
@@ -17,8 +17,61 @@ from typing import Dict, Any, Optional
 
 from app.ai.llm_engine import llm_engine
 from app.ai.grammar_engine import grammar_engine
-from app.ai.confidence_engine import confidence_engine
 from app.utils.logger import logger
+
+
+def _text_confidence_score(text: str) -> float:
+    """
+    Estimate confidence from written text alone (no audio).
+
+    Signals used:
+    - Length: longer responses suggest more confidence and depth
+    - Filler words: 'um', 'uh', 'like', 'you know' reduce score
+    - Hedging phrases: 'I think maybe', 'I'm not sure' reduce score
+    - Assertive phrases: 'I believe', 'I am confident' boost score
+    - Vocabulary richness: unique_words / total_words ratio
+    - Sentence completeness: sentences should end with punctuation
+    """
+    if not text or len(text.strip()) < 10:
+        return 40.0
+
+    words = text.lower().split()
+    total_words = len(words)
+
+    # ── Filler word penalty ────────────────────────────────────────────────
+    filler_words = {"um", "uh", "hmm", "like", "basically", "literally",
+                    "actually", "you know", "i mean", "sort of", "kind of"}
+    filler_count = sum(1 for w in words if w in filler_words)
+    filler_penalty = min(20, (filler_count / max(total_words, 1)) * 100 * 2)
+
+    # ── Hedging phrase penalty ─────────────────────────────────────────────
+    hedges = ["i'm not sure", "i think maybe", "not really", "i suppose",
+              "i guess", "perhaps maybe", "i don't know", "might be"]
+    hedge_penalty = sum(5 for h in hedges if h in text.lower())
+
+    # ── Assertive phrase bonus ─────────────────────────────────────────────
+    assertive = ["i believe", "i am confident", "i know that", "definitely",
+                 "absolutely", "certainly", "i am sure", "without doubt",
+                 "my experience", "i have", "i achieved", "i successfully"]
+    assertive_bonus = min(15, sum(3 for a in assertive if a in text.lower()))
+
+    # ── Length score ───────────────────────────────────────────────────────
+    # 30–200 words is ideal for most responses
+    if total_words < 10:
+        length_score = 40.0
+    elif total_words < 30:
+        length_score = 55.0
+    elif total_words <= 200:
+        length_score = 75.0
+    else:
+        length_score = 70.0   # very long can mean rambling
+
+    # ── Vocabulary richness ────────────────────────────────────────────────
+    unique_ratio = len(set(words)) / max(total_words, 1)
+    vocab_bonus = min(10, unique_ratio * 15)
+
+    score = length_score + assertive_bonus + vocab_bonus - filler_penalty - hedge_penalty
+    return max(20.0, min(100.0, round(score, 1)))
 
 
 # ── Default fallback result when LLM is unavailable ────────────────────────
@@ -82,11 +135,11 @@ class SkillsEvaluator:
     ) -> Dict[str, Any]:
         """
         Evaluate one speaking practice turn.
-        Reuses grammar_engine and confidence_engine for sub-scores,
+        Reuses grammar_engine for grammar sub-scores,
         and uses LLM for holistic fluency / vocabulary / feedback.
         """
         grammar_score, grammar_issues = await grammar_engine.check_grammar(response)
-        conf_score = confidence_engine.compute(response)
+        conf_score = _text_confidence_score(response)
 
         system_prompt = (
             "You are an expert English communication coach. "
@@ -157,7 +210,7 @@ Return ONLY this JSON (no markdown, no prose):
         filler_words = {"um", "uh", "like", "basically", "you know", "sort of", "kind of", "literally"}
         filler_count = sum(1 for w in words if w.lower().rstrip(".,!?") in filler_words)
         grammar_score, _ = await grammar_engine.check_grammar(response)
-        conf_score = confidence_engine.compute(response)
+        conf_score = _text_confidence_score(response)
 
         system_prompt = (
             "You are a fluency and public speaking coach. "
@@ -226,7 +279,7 @@ Return ONLY this JSON:
         Returns band score (0–9) plus all IELTS-specific criteria.
         """
         grammar_score, _ = await grammar_engine.check_grammar(response)
-        conf_score = confidence_engine.compute(response)
+        conf_score = _text_confidence_score(response)
 
         system_prompt = (
             "You are a certified IELTS examiner. "
@@ -579,7 +632,7 @@ Return ONLY this JSON:
     async def evaluate_hr_turn(self, prompt: str, response: str) -> Dict[str, Any]:
         """Evaluate an HR / behavioural communication response."""
         grammar_score, _ = await grammar_engine.check_grammar(response)
-        conf_score = confidence_engine.compute(response)
+        conf_score = _text_confidence_score(response)
         system_prompt = (
             "You are a senior HR manager and communication coach. "
             "Evaluate the candidate's HR / behavioural interview response and return ONLY a JSON object."
@@ -636,7 +689,7 @@ Return ONLY this JSON:
     async def evaluate_public_speaking_turn(self, prompt: str, response: str) -> Dict[str, Any]:
         """Evaluate a speech, presentation, or seminar response."""
         grammar_score, _ = await grammar_engine.check_grammar(response)
-        conf_score = confidence_engine.compute(response)
+        conf_score = _text_confidence_score(response)
         system_prompt = (
             "You are a professional public speaking coach. "
             "Evaluate the following speech/presentation response and return ONLY a JSON object."
@@ -747,7 +800,7 @@ Return ONLY this JSON:
     async def evaluate_storytelling_turn(self, prompt: str, response: str) -> Dict[str, Any]:
         """Evaluate a storytelling response for structure, emotion, flow, and creativity."""
         grammar_score, _ = await grammar_engine.check_grammar(response)
-        conf_score = confidence_engine.compute(response)
+        conf_score = _text_confidence_score(response)
         system_prompt = (
             "You are a professional storytelling and communication coach. "
             "Evaluate the following story response and return ONLY a JSON object."
@@ -805,7 +858,7 @@ Return ONLY this JSON:
     async def evaluate_leadership_turn(self, scenario: str, response: str) -> Dict[str, Any]:
         """Evaluate a leadership communication response."""
         grammar_score, _ = await grammar_engine.check_grammar(response)
-        conf_score = confidence_engine.compute(response)
+        conf_score = _text_confidence_score(response)
         system_prompt = (
             "You are an executive leadership coach. "
             "Evaluate the following leadership communication response and return ONLY a JSON object."
@@ -862,7 +915,7 @@ Return ONLY this JSON:
     async def evaluate_negotiation_turn(self, scenario: str, response: str) -> Dict[str, Any]:
         """Evaluate a negotiation roleplay response."""
         grammar_score, _ = await grammar_engine.check_grammar(response)
-        conf_score = confidence_engine.compute(response)
+        conf_score = _text_confidence_score(response)
         system_prompt = (
             "You are an expert negotiation trainer. "
             "Evaluate the following negotiation response and return ONLY a JSON object."
@@ -929,7 +982,7 @@ Return ONLY this JSON:
     async def evaluate_confidence_turn(self, situation: str, response: str) -> Dict[str, Any]:
         """Evaluate a high-pressure confidence challenge response."""
         grammar_score, _ = await grammar_engine.check_grammar(response)
-        conf_score = confidence_engine.compute(response)
+        conf_score = _text_confidence_score(response)
         system_prompt = (
             "You are a confidence and assertiveness coach. "
             "Evaluate how confidently and effectively the user handled the given situation "
