@@ -104,6 +104,8 @@ class SkillProgress(Base):
     )
     trainer_type = Column(String(50), nullable=False)
     sessions_count = Column(Integer, default=0)
+    xp = Column(Integer, default=0)
+    level = Column(Integer, default=1)
     avg_score = Column(Numeric(5, 2), nullable=True)
     last_score = Column(Numeric(5, 2), nullable=True)
     best_score = Column(Numeric(5, 2), nullable=True)

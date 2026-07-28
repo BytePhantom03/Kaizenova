@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, ForeignKey, Text, Uuid as UUID
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, ForeignKey, Text, JSON, Uuid as UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 from sqlalchemy.sql import func
@@ -38,6 +38,13 @@ class Profile(Base):
     github_url = Column(String(500), nullable=True)
     timezone = Column(String(100), default="UTC")
     profile_complete = Column(Integer, default=0)
+    
+    # Gamification
+    current_streak = Column(Integer, default=0)
+    longest_streak = Column(Integer, default=0)
+    last_practice_date = Column(DateTime(timezone=True), nullable=True)
+    badges = Column(JSON, default=list)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -111,6 +111,8 @@ class SkillProgressRepository(BaseRepository[SkillProgress]):
                 "user_id": user_id,
                 "trainer_type": trainer_type,
                 "sessions_count": 1,
+                "level": 1,
+                "xp": 50,
                 "avg_score": new_score,
                 "last_score": new_score,
                 "best_score": new_score,

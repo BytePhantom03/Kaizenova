@@ -26,6 +26,8 @@ interface TrainerInfo {
 interface ProgressEntry {
   trainer_type: string;
   sessions_count: number;
+  level?: number;
+  xp?: number;
   avg_score: number | null;
   last_score: number | null;
   best_score: number | null;
@@ -166,14 +168,27 @@ function TrainerCard({
           <Clock className="h-3 w-3" /> ~{trainer.avg_session_minutes} min/session
         </div>
 
-        {/* Progress */}
+        {/* Progress & Gamification */}
         {progress && progress.sessions_count > 0 && (
-          <div className="pt-2 border-t border-border/40 space-y-1.5">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground/70">{progress.sessions_count} sessions</span>
-              <span className="text-primary font-medium">Best: {progress.best_score?.toFixed(0)}</span>
+          <div className="pt-2 border-t border-border/40 space-y-2">
+            <div className="flex items-center justify-between text-[11px] mb-1">
+              <span className="text-primary font-bold flex items-center gap-1">
+                <Crown className="h-3 w-3" /> Level {progress.level || 1}
+              </span>
+              <span className="text-muted-foreground/70">{progress.xp || 0} / {(progress.level || 1) * 500} XP</span>
             </div>
-            <ScoreBar score={progress.avg_score} />
+            <div className="h-1.5 w-full bg-primary/10 rounded-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-primary rounded-full" 
+                initial={{ width: 0 }} 
+                animate={{ width: `${Math.min(100, ((progress.xp || 0) / ((progress.level || 1) * 500)) * 100)}%` }} 
+              />
+            </div>
+            
+            <div className="flex items-center justify-between text-[11px] pt-1">
+              <span className="text-muted-foreground/70">{progress.sessions_count} sessions</span>
+              <span className="text-foreground font-medium flex items-center gap-1"><Target className="h-3 w-3 text-muted-foreground" /> Best: {progress.best_score?.toFixed(0)}</span>
+            </div>
           </div>
         )}
       </div>

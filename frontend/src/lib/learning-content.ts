@@ -1021,4 +1021,18 @@ export function getAllLearningContent(): SkillLearningContent[] {
   return Object.values(LEARNING_CONTENT);
 }
 
+export function getRecommendedResource(trainerType: string, weakDimension: string): LearningResource | null {
+  const content = LEARNING_CONTENT[trainerType];
+  if (!content || !content.resources || content.resources.length === 0) return null;
+
+  // Try to find a resource that explicitly mentions the weak dimension (e.g. 'grammar', 'fluency')
+  const keyword = weakDimension.toLowerCase();
+  const matched = content.resources.find(
+    r => r.title.toLowerCase().includes(keyword) || r.description.toLowerCase().includes(keyword)
+  );
+
+  // Fallback to the first resource if no specific match
+  return matched || content.resources[0];
+}
+
 export { LEARNING_CONTENT };

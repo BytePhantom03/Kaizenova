@@ -25,6 +25,8 @@ interface DashboardStats {
   readiness_score: number;
   avg_score: number;
   streak_count: number;
+  badges?: string[];
+  longest_streak?: number;
   recent_activity: any[];
 }
 
@@ -1398,6 +1400,41 @@ function DashboardTab({ stats, loading, router, firstName, getGreeting, onTabCha
             </div>
           </div>
         </motion.div>
+
+        {/* Gamification Showcase */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="lg:col-span-1">
+          <div className="rounded-2xl border border-border bg-card/30 p-6 h-full flex flex-col">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Achievements</h3>
+            
+            {stats.badges && stats.badges.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 flex-1">
+                {stats.badges.includes("3_day_streak") && (
+                  <div className="flex flex-col items-center justify-center p-3 rounded-xl border border-accent/20 bg-accent/5 text-center">
+                    <div className="h-10 w-10 rounded-full bg-accent/10 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
+                      <Flame className="h-5 w-5 text-accent" />
+                    </div>
+                    <span className="text-[11px] font-bold text-foreground">3-Day Streak</span>
+                  </div>
+                )}
+                {stats.badges.includes("high_achiever") && (
+                  <div className="flex flex-col items-center justify-center p-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 text-center">
+                    <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(234,179,8,0.2)]">
+                      <Star className="h-5 w-5 text-yellow-500" />
+                    </div>
+                    <span className="text-[11px] font-bold text-foreground">High Achiever</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center py-6 border border-dashed border-border rounded-xl bg-card/20 text-center">
+                <Target className="h-8 w-8 text-muted-foreground/30 mb-2" />
+                <span className="text-sm font-medium text-foreground mb-1">No Badges Yet</span>
+                <span className="text-xs text-muted-foreground">Maintain a practice streak to earn badges!</span>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
 
         {/* AI Coach */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="lg:col-span-1">

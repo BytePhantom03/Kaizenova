@@ -40,12 +40,22 @@ class AnalyticsService:
         streak = await streak_repo.get_by_user_id(db, user_id)
         streak_count = streak.current_streak if streak else 0
 
+        # Gamification data from Profile
+        from app.models.database.user import Profile
+        prof_res = await db.execute(select(Profile).filter(Profile.user_id == user_id))
+        profile = prof_res.scalars().first()
+        badges = profile.badges if profile and profile.badges else []
+        current_streak = profile.current_streak if profile else 0
+        longest_streak = profile.longest_streak if profile else 0
+
         return {
             "total_interviews": total_interviews,
             "readiness_score": round(avg_score, 2),
             "avg_score": round(avg_score, 2),
             "recent_activity": recent_activity,
-            "streak_count": streak_count
+            "streak_count": current_streak,  # Use global profile streak
+            "badges": badges,
+            "longest_streak": longest_streak
         }
 
     async def get_recommendations(self, db: AsyncSession, user_id: UUID) -> list[dict]:

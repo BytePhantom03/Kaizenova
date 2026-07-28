@@ -17,8 +17,9 @@ import AIAvatar from "@/components/interview/AIAvatar";
 import {
   ChevronRight, ArrowLeft, Sparkles, Mic, MicOff,
   CheckCircle2, AlertCircle, TrendingUp, Star, RotateCcw,
-  Volume2, Loader2
+  Volume2, Loader2, ExternalLink, PlayCircle, Clock
 } from "lucide-react";
+import { getRecommendedResource } from "@/lib/learning-content";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface SessionConfig {
@@ -217,6 +218,22 @@ function SessionReportPanel({ report, onRestart, trainerType }: {
   const scoreColor = report.overall_score >= 75 ? "text-emerald-400"
     : report.overall_score >= 55 ? "text-yellow-400" : "text-red-400";
 
+  // Find weakest dimension
+  const dimensionEntries = Object.entries(report.dimension_scores)
+    .filter(([k]) => k.endsWith("_score") && !k.startsWith("composite"));
+  
+  let weakDimension = "general";
+  let minScore = 100;
+  dimensionEntries.forEach(([k, v]) => {
+    if (v < minScore) {
+      minScore = v;
+      weakDimension = k.replace("_score", "");
+    }
+  });
+
+  const recommendedResource = minScore < 70 ? getRecommendedResource(trainerType, weakDimension) : null;
+
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.97 }}
@@ -290,6 +307,43 @@ function SessionReportPanel({ report, onRestart, trainerType }: {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Smart Resource Linking */}
+      {recommendedResource && (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <PlayCircle className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Recommended for you</span>
+            <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full ml-auto font-medium">To improve {weakDimension.replace("_", " ")}</span>
+          </div>
+          <a
+            href={recommendedResource.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group block rounded-lg border border-border bg-card/50 p-4 hover:border-primary/40 hover:bg-primary/10 transition-all cursor-pointer"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                  {recommendedResource.title}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{recommendedResource.description}</p>
+              </div>
+              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0 mt-0.5" />
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-md border text-muted-foreground border-border bg-surface">
+                {recommendedResource.platform}
+              </span>
+              {recommendedResource.duration && (
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-2.5 w-2.5" /> {recommendedResource.duration}
+                </span>
+              )}
+            </div>
+          </a>
         </div>
       )}
 

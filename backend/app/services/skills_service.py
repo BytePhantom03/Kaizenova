@@ -23,6 +23,7 @@ from app.repositories.skills_repository import (
     skill_session_repo, skill_turn_repo, skill_progress_repo, vocabulary_repo,
 )
 from app.ai.skills_evaluator import skills_evaluator, MAX_TURNS
+from app.services.gamification_service import calculate_gamification_rewards
 from app.utils.logger import logger
 
 # ── Trainer catalog ─────────────────────────────────────────────────────────
@@ -307,8 +308,14 @@ class SkillsService:
             db, user_id, session.trainer_type, report["overall_score"]
         )
 
+        # Update Gamification (XP, Levels, Streaks, Badges)
+        rewards = await calculate_gamification_rewards(
+            db, str(user_id), session.trainer_type, report["overall_score"]
+        )
+
         logger.info("skills_session_completed", session_id=str(session_id),
-                    trainer=session.trainer_type, score=report["overall_score"])
+                    trainer=session.trainer_type, score=report["overall_score"],
+                    rewards=rewards)
 
         return {
             "session_id": str(session_id),
@@ -322,6 +329,7 @@ class SkillsService:
             "suggestions": report["suggestions"],
             "improvement_roadmap": report["improvement_roadmap"],
             "turns_count": len(evaluations),
+            "gamification": rewards,
         }
 
     async def get_session(

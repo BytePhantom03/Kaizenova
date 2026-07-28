@@ -118,6 +118,7 @@ class SessionReportResponse(BaseModel):
     suggestions: List[str]
     improvement_roadmap: List[str]
     turns_count: int
+    gamification: Optional[Dict[str, Any]] = None
 
 
 # ── Progress schemas ─────────────────────────────────────────────────────────
@@ -125,6 +126,8 @@ class SessionReportResponse(BaseModel):
 class TrainerProgressResponse(BaseModel):
     trainer_type: str
     sessions_count: int
+    level: int = 1
+    xp: int = 0
     avg_score: Optional[float] = None
     last_score: Optional[float] = None
     best_score: Optional[float] = None
